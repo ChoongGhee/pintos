@@ -97,10 +97,10 @@ void timer_sleep(int64_t ticks)
 
 	ASSERT(intr_get_level() == INTR_ON);
 
+	// 재원 수정 ala
 	thread_sleep(start + ticks);
 	// while (timer_elapsed(start) < ticks)
-	//  재원 수정
-	thread_yield();
+	// thread_yield();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -132,7 +132,7 @@ static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
-	// 재원 추가
+	// 재원 추가 ala
 	thread_awake(ticks);
 
 	thread_tick();

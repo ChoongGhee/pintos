@@ -31,7 +31,7 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-// 재원 추가
+// 재원 추가 ala
 static struct list sleeping_list;
 
 /* Idle thread. */
@@ -117,7 +117,7 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	list_init(&ready_list);
 	list_init(&destruction_req);
-	// 재원 추가
+	// 재원 추가 ala
 	list_init(&sleeping_list);
 
 	/* Set up a thread structure for the running thread. */
@@ -241,6 +241,7 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock(t);
+	preempt();
 
 	return tid;
 }
@@ -260,7 +261,7 @@ void thread_block(void)
 	schedule();
 }
 
-// 재원 추가
+// 재원 추가 ala
 void thread_sleep(int64_t ticks)
 {
 	struct thread *temp = thread_current();
@@ -389,8 +390,14 @@ void thread_yield(void)
 	ASSERT(!intr_context());
 
 	old_level = intr_disable();
+	// if (curr != idle_thread)
+	// 	list_push_back(&ready_list, &curr->elem);
 	if (curr != idle_thread)
-		list_push_back(&ready_list, &curr->elem);
+	{
+		// 재원 추가 ala-priority
+		list_insert_ordered(&ready_list, &curr->elem, &thread_greater_fun, (void *)offsetof(struct thread, priority));
+		// list_push_back(&ready_list, &curr->elem);
+	}
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
 }
@@ -399,6 +406,8 @@ void thread_yield(void)
 void thread_set_priority(int new_priority)
 {
 	thread_current()->priority = new_priority;
+	thread_current()->original_priority = new_priority;
+	preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -512,7 +521,11 @@ init_thread(struct thread *t, const char *name, int priority)
 	strlcpy(t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
-	// 스레드가 쓰는 메모리 영역에서 커널 stack과 구분 짓는 경계선 표시 (업데이트 됨?)
+	// 재원 추가 prior-donate-one
+	t->original_priority = priority;
+	// 재원 추가 prior-donate-multiple1
+	list_init(&t->lock_list);
+	// 스레드가 쓰는 메모리 영역에서 커널 stack과 구분 짓는 경계선 표시
 	t->magic = THREAD_MAGIC;
 }
 
@@ -698,4 +711,19 @@ allocate_tid(void)
 	lock_release(&tid_lock);
 
 	return tid;
+}
+
+// 재원 추가 prior-change
+void preempt(void)
+{
+	struct thread *cur = thread_current();
+
+	if (!list_empty(&ready_list) && cur != idle_thread)
+	{
+		struct thread *front_thread = list_entry(list_front(&ready_list), struct thread, elem);
+		if (cur->priority < front_thread->priority)
+		{
+			thread_yield();
+		}
+	}
 }

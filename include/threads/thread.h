@@ -29,6 +29,8 @@ typedef int tid_t;
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
+// // 재원 추가 할당받지 않으면 64로 생각
+// #define NO_DONATED 64
 
 /* A kernel thread or user process.
  *
@@ -107,6 +109,10 @@ struct thread
 	enum thread_status status; /* Thread state. */
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
+	// 재원 추가 prior-donate
+	int original_priority;
+	// 재원 추가 prior-donate-multiple1
+	struct list lock_list;
 
 	/* Shared between thread.c and synch.c. */
 	// 연결리스트 종성
@@ -120,6 +126,7 @@ struct thread
 	struct list_elem elem; /* List element. */
 	// 재원 추가
 	int64_t sleep_tick;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
@@ -178,5 +185,5 @@ void thread_awake(int64_t current_ticks);
 bool sleep_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_less_fun(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool thread_greater_fun(const struct list_elem *a, const struct list_elem *b, void *aux);
-
+void preempt(void);
 #endif /* threads/thread.h */
