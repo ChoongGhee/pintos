@@ -114,7 +114,7 @@ struct thread
 
 	// 재원 추가 prior-donate-multiple1
 	struct list lock_list;
-
+	struct lock *wating_lock;
 	/* Shared between thread.c and synch.c. */
 	// 연결리스트 종성
 	// 스케쥴링 시 앞 뒤 보고 판단하기 위함.

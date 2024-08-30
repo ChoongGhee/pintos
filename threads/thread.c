@@ -409,6 +409,8 @@ void thread_set_priority(int new_priority)
 {
 	thread_current()->priority = new_priority;
 	thread_current()->original_priority = new_priority;
+	// 재원 prior-donate-lower
+	// set_max_prior_t(thread_current());
 	preempt();
 }
 
@@ -523,6 +525,8 @@ init_thread(struct thread *t, const char *name, int priority)
 	strlcpy(t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
+	// 재원 추가 prior-donate-nest
+	t->wating_lock = NULL;
 	// 재원 추가 prior-donate-one
 	t->original_priority = priority;
 	// 재원 추가 prior-donate-multiple1

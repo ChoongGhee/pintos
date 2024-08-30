@@ -205,24 +205,40 @@ bool lock_less_func(const struct list_elem *a,
 
 	return lock_a->donated_priority < lock_b->donated_priority;
 }
-
-// 재원 piror-donate
+// 재원 prior-donate-nest
 void donate(struct thread *t, struct lock *lock)
 {
+	// 지나가면서 나보다 작다? 싹다 줌
+	// 왜냐면 마지막 놈이 풀려도 나머지 놈이 또 우선순위 역전이기 떄문
+	if (lock->holder->priority < t->priority)
+	{
+		lock->holder->priority = t->priority;
+	}
 
-	lock->donated_priority = t->priority;
-	lock->holder->priority = t->priority;
-	set_max_prior(lock);
+	if (lock->holder->wating_lock != NULL)
+	{
+		donate(t, lock->holder->wating_lock);
+	}
+	else
+	{
+		// lock->holder->priority = t->priority;
+		lock->donated_priority = t->priority;
+	}
 }
 
 void donate_realese(struct lock *lock)
 {
-
-	lock->holder->priority = lock->holder->original_priority;
-	lock->donated_priority = PRI_MIN;
+	if (lock->holder->wating_lock != NULL)
+	{
+		lock->holder->priority = lock->holder->wating_lock->holder->priority;
+	}
 	list_remove(&lock->lock_elem);
+
 	set_max_prior(lock);
+
+	lock->donated_priority = PRI_MIN;
 }
+
 void set_max_prior(struct lock *lock)
 {
 	// 우선순위를 원래대로 초기화
@@ -237,16 +253,35 @@ void set_max_prior(struct lock *lock)
 		{
 			struct lock *max_priority_lock = list_entry(max_priority_lock_elem, struct lock, lock_elem);
 
-			// 현재 스레드의 우선순위를 업데이트
 			if (lock->holder->priority < max_priority_lock->donated_priority)
 			{
 				lock->holder->priority = max_priority_lock->donated_priority;
 			}
 		}
 	}
+}
 
-	// 우선순위가 변경되면 선점(preemption)을 고려할 수 있음
-	// preempt();
+// 재원 prior-donate-lower
+void set_max_prior_t(struct thread *t)
+{
+	// 우선순위를 원래대로 초기화
+	t->priority = t->original_priority;
+
+	// 리스트가 비어있지 않으면 우선순위가 가장 높은 lock을 찾는다
+	if (!list_empty(&t->lock_list))
+	{
+		struct list_elem *max_priority_lock_elem = list_max(&t->lock_list, lock_less_func, NULL);
+
+		if (max_priority_lock_elem != NULL)
+		{
+			struct lock *max_priority_lock = list_entry(max_priority_lock_elem, struct lock, lock_elem);
+
+			if (t->priority < max_priority_lock->donated_priority)
+			{
+				t->priority = max_priority_lock->donated_priority;
+			}
+		}
+	}
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -268,6 +303,7 @@ void lock_acquire(struct lock *lock)
 	if (lock->holder != NULL)
 	{
 		donate(cur, lock);
+		cur->wating_lock = lock;
 	}
 
 	sema_down(&lock->semaphore);
@@ -289,6 +325,10 @@ void lock_release(struct lock *lock)
 
 	// 재원 추가 priority-donate
 	donate_realese(lock);
+
+	// 재원 추가 prior-donate-nest
+	//  현재 스레드는 더 이상 이 락을 기다리고 있지 않음
+	thread_current()->wating_lock = NULL;
 
 	lock->holder = NULL;
 	sema_up(&lock->semaphore);
