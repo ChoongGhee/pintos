@@ -29,8 +29,6 @@ typedef int tid_t;
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
-// // 재원 추가 할당받지 않으면 64로 생각
-// #define NO_DONATED 64
 
 /* A kernel thread or user process.
  *
@@ -111,6 +109,9 @@ struct thread
 	int priority;			   /* Priority. */
 	// 재원 추가 prior-donate
 	int original_priority;
+	// 재원 추가 alarm
+	int sleep_tick;
+
 	// 재원 추가 prior-donate-multiple1
 	struct list lock_list;
 
@@ -124,8 +125,6 @@ struct thread
 	// 2. synch.c 의 세마코어 대기 리스트의 원소
 	// 로 쓰인다. 저 목적 2개는 상호배타적이지만, 들어가는 원소의 요소는 동일한 포맷을 가진다라는 뜻.
 	struct list_elem elem; /* List element. */
-	// 재원 추가
-	int64_t sleep_tick;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -180,8 +179,8 @@ int thread_get_load_avg(void);
 void do_iret(struct intr_frame *tf);
 
 // 재원 추가
-void thread_sleep(int64_t ticks);
-void thread_awake(int64_t current_ticks);
+void thread_sleep(int ticks);
+void thread_awake(int current_ticks);
 bool sleep_tick_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_less_fun(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool thread_greater_fun(const struct list_elem *a, const struct list_elem *b, void *aux);

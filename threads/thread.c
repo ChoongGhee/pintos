@@ -169,7 +169,7 @@ void thread_tick(void)
 	}
 }
 // 재원 추가
-void thread_awake(int64_t current_ticks)
+void thread_awake(int current_ticks)
 {
 	struct list_elem *temp;
 
@@ -262,7 +262,7 @@ void thread_block(void)
 }
 
 // 재원 추가 ala
-void thread_sleep(int64_t ticks)
+void thread_sleep(int ticks)
 {
 	struct thread *temp = thread_current();
 	enum intr_level old_level;
@@ -276,13 +276,14 @@ void thread_sleep(int64_t ticks)
 
 	intr_set_level(old_level);
 }
+
 bool thread_less_fun(const struct list_elem *a, const struct list_elem *b, void *aux)
 {
 	size_t offset = (size_t)aux;
 
 	// a와 b에서 aux 오프셋에 해당하는 멤버의 값을 가져옴
-	int64_t a_val = *(int64_t *)((uint8_t *)list_entry(a, struct thread, elem) + offset);
-	int64_t b_val = *(int64_t *)((uint8_t *)list_entry(b, struct thread, elem) + offset);
+	int a_val = *(int *)((uint8_t *)list_entry(a, struct thread, elem) + offset);
+	int b_val = *(int *)((uint8_t *)list_entry(b, struct thread, elem) + offset);
 
 	return a_val < b_val;
 }
@@ -291,8 +292,8 @@ bool thread_greater_fun(const struct list_elem *a, const struct list_elem *b, vo
 	size_t offset = (size_t)aux;
 
 	// a와 b에서 aux 오프셋에 해당하는 멤버의 값을 가져옴
-	int64_t a_val = *(int64_t *)((uint8_t *)list_entry(a, struct thread, elem) + offset);
-	int64_t b_val = *(int64_t *)((uint8_t *)list_entry(b, struct thread, elem) + offset);
+	int a_val = *(int *)((uint8_t *)list_entry(a, struct thread, elem) + offset);
+	int b_val = *(int *)((uint8_t *)list_entry(b, struct thread, elem) + offset);
 
 	return a_val > b_val;
 }
@@ -398,6 +399,7 @@ void thread_yield(void)
 		list_insert_ordered(&ready_list, &curr->elem, &thread_greater_fun, (void *)offsetof(struct thread, priority));
 		// list_push_back(&ready_list, &curr->elem);
 	}
+
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
 }
@@ -716,10 +718,11 @@ allocate_tid(void)
 // 재원 추가 prior-change
 void preempt(void)
 {
-	struct thread *cur = thread_current();
 
+	struct thread *cur = thread_current();
 	if (!list_empty(&ready_list) && cur != idle_thread)
 	{
+
 		struct thread *front_thread = list_entry(list_front(&ready_list), struct thread, elem);
 		if (cur->priority < front_thread->priority)
 		{
