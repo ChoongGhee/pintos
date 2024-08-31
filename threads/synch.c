@@ -191,9 +191,11 @@ sema_test_helper(void *sema_)
 void lock_init(struct lock *lock)
 {
 	ASSERT(lock != NULL);
-
+	// 재원 추가 prior-donate
 	lock->donated_priority = PRI_MIN;
 	lock->holder = NULL;
+	// 재원 추가 prior-chain
+	// list_init(&lock->donate_list);
 	sema_init(&lock->semaphore, 1);
 }
 bool lock_less_func(const struct list_elem *a,
@@ -213,25 +215,18 @@ void donate(struct thread *t, struct lock *lock)
 	if (lock->holder->priority < t->priority)
 	{
 		lock->holder->priority = t->priority;
+		lock->donated_priority = t->priority;
 	}
 
 	if (lock->holder->wating_lock != NULL)
 	{
 		donate(t, lock->holder->wating_lock);
 	}
-	else
-	{
-		// lock->holder->priority = t->priority;
-		lock->donated_priority = t->priority;
-	}
 }
 
 void donate_realese(struct lock *lock)
 {
-	if (lock->holder->wating_lock != NULL)
-	{
-		lock->holder->priority = lock->holder->wating_lock->holder->priority;
-	}
+
 	list_remove(&lock->lock_elem);
 
 	set_max_prior(lock);

@@ -410,7 +410,7 @@ void thread_set_priority(int new_priority)
 	thread_current()->priority = new_priority;
 	thread_current()->original_priority = new_priority;
 	// 재원 prior-donate-lower
-	// set_max_prior_t(thread_current());
+	set_max_prior_t(thread_current());
 	preempt();
 }
 

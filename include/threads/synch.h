@@ -25,6 +25,9 @@ struct lock
 
 	// 재원 추가 prior-donate
 	int donated_priority;
+	// 재원 추가 prior-chain
+	// struct list donate_list;
+
 	struct list_elem lock_elem;
 };
 
