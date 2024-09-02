@@ -1,0 +1,6 @@
+*.o
+*.O
+*.d
+*.output
+*.errors
+*.result
