@@ -295,17 +295,22 @@ void lock_acquire(struct lock *lock)
 
 	// 재원 추가 priority-donate_one
 	struct thread *cur = thread_current();
-	if (lock->holder != NULL)
+	if (!thread_mlfqs)
 	{
-		donate(cur, lock);
-		cur->wating_lock = lock;
+		if (lock->holder != NULL)
+		{
+			donate(cur, lock);
+			cur->wating_lock = lock;
+		}
 	}
-
 	sema_down(&lock->semaphore);
 
 	lock->holder = cur;
-	// 재원 추가 priority-donate-mulitple
-	list_push_back(&cur->lock_list, &lock->lock_elem);
+	if (!thread_mlfqs)
+	{
+		// 재원 추가 priority-donate-mulitple
+		list_push_back(&cur->lock_list, &lock->lock_elem);
+	}
 }
 /* Releases LOCK, which must be owned by the current thread.
    This is lock_release function.
@@ -317,14 +322,15 @@ void lock_release(struct lock *lock)
 {
 	ASSERT(lock != NULL);
 	ASSERT(lock_held_by_current_thread(lock));
+	if (!thread_mlfqs)
+	{
+		// 재원 추가 priority-donate
+		donate_realese(lock);
 
-	// 재원 추가 priority-donate
-	donate_realese(lock);
-
-	// 재원 추가 prior-donate-nest
-	//  현재 스레드는 더 이상 이 락을 기다리고 있지 않음
-	thread_current()->wating_lock = NULL;
-
+		// 재원 추가 prior-donate-nest
+		//  현재 스레드는 더 이상 이 락을 기다리고 있지 않음
+		thread_current()->wating_lock = NULL;
+	}
 	lock->holder = NULL;
 	sema_up(&lock->semaphore);
 }

@@ -132,6 +132,14 @@ static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
+	if (thread_mlfqs)
+	{
+		if (ticks % TIMER_FREQ == 0)
+		{
+			cal_load_avg();
+			all_cpu_set();
+		}
+	}
 	// 재원 추가 ala
 	thread_awake(ticks);
 

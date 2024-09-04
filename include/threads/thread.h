@@ -115,16 +115,12 @@ struct thread
 	// 재원 추가 prior-donate-multiple1
 	struct list lock_list;
 	struct lock *wating_lock;
-	/* Shared between thread.c and synch.c. */
-	// 연결리스트 종성
-	// 스케쥴링 시 앞 뒤 보고 판단하기 위함.
-
-	//  이 리스트의 경우 설명서에선 2가지 목적으로 사용 될 수 있다는 점을 꼽음.
-	//  즉 이 리스트의 요소(안에 있는 노드, 좌우로 연결된)가
-	// 1. thread.c run 큐의 원소
-	// 2. synch.c 의 세마코어 대기 리스트의 원소
-	// 로 쓰인다. 저 목적 2개는 상호배타적이지만, 들어가는 원소의 요소는 동일한 포맷을 가진다라는 뜻.
 	struct list_elem elem; /* List element. */
+
+	// 재원 추가 mlfqs
+	int nice;
+	int recent_cpu;
+	struct list_elem all_elem;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -172,7 +168,7 @@ int thread_get_priority(void);
 void thread_set_priority(int);
 
 int thread_get_nice(void);
-void thread_set_nice(int);
+void thread_set_nice(int nice);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
@@ -185,4 +181,11 @@ bool sleep_tick_less(const struct list_elem *a, const struct list_elem *b, void 
 bool thread_less_fun(const struct list_elem *a, const struct list_elem *b, void *aux);
 bool thread_greater_fun(const struct list_elem *a, const struct list_elem *b, void *aux);
 void preempt(void);
+
+void cal_prior(struct thread *t);
+void cal_recent_cpu(struct thread *t);
+void cal_load_avg(void);
+void cur_cpu_increment(void);
+void all_prior_set(void);
+void all_cpu_set(void);
 #endif /* threads/thread.h */
