@@ -51,6 +51,10 @@ tid_t process_create_initd(const char *file_name)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
 
+	// 재원 추가 passing
+	char *trash_svg;
+	strtok_r(file_name, " ", &trash_svg);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -206,9 +210,10 @@ int process_exec(void *f_name)
 int process_wait(tid_t child_tid UNUSED)
 {
 	// 재원 추가
-	while (1)
+	int i = 0;
+	while (i < 1 << 29)
 	{
-		continue;
+		i++;
 	}
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
@@ -220,6 +225,8 @@ int process_wait(tid_t child_tid UNUSED)
 void process_exit(void)
 {
 	struct thread *curr = thread_current();
+
+	printf("%s: exit(%d)\n", curr->name, curr->exit_num);
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
@@ -345,13 +352,8 @@ load(const char *file_name, struct intr_frame *if_)
 
 	// 재원 추가 argument
 	char *temp_token, *trash_svg;
-	char temp_filename[128];
-	if (strlen(file_name) >= 128)
-	{
-		// 오류 처리: 파일 이름이 너무 깁니다
-		goto done;
-	}
-	memcpy(temp_filename, file_name, strlen(file_name));
+	char *temp_filename = palloc_get_page(0);
+	strlcpy(temp_filename, file_name, PGSIZE);
 	temp_token = strtok_r(file_name, " ", &trash_svg);
 
 	/* Allocate and activate page directory. */
@@ -448,7 +450,7 @@ load(const char *file_name, struct intr_frame *if_)
 	char *save_ptr, *token;
 	int argc = 0;
 	// 전산학 전통, 관례상 128개의 인자를 받음. 1kb정도
-	char *argv[128];
+	uintptr_t argv[128];
 
 	// 파싱 작업 후 바로 작성 rsp에
 	for (token = strtok_r(temp_filename, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
@@ -459,11 +461,9 @@ load(const char *file_name, struct intr_frame *if_)
 		argc++;
 	}
 
-	// 중간 패딩 및 경계면
-	argv[argc] = if_->rsp;
-
+	// 중간 패딩 및 경계먄
 	if_->rsp = if_->rsp & ~7ULL;
-	memset(if_->rsp, 0, argv[argc] - if_->rsp);
+	if_->rsp -= 8;
 
 	// 값들의 포인터 작성
 	int cnt = argc - 1;
@@ -473,16 +473,14 @@ load(const char *file_name, struct intr_frame *if_)
 		*(uintptr_t *)(if_->rsp) = argv[cnt];
 		cnt--;
 	}
+
+	// 세팅
 	// argv 배열 rsi에 넣어줌.
 	if_->R.rsi = if_->rsp;
-
-	// return 값 넣어줌. main의 리턴되는 주소
+	// main의 리턴되는 주소
 	if_->rsp -= 8;
-	memset(if_->rsp, 0, 8);
 	// argc값 rdi에 세팅
 	if_->R.rdi = argc;
-
-	msg("%s", *(uintptr_t *)if_->R.rsi);
 
 	success = true;
 
