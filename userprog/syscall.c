@@ -11,7 +11,8 @@
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
 #include "userprog/process.h"
-// #include "threads/thread.c"
+#include "filesys/file.h"
+
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
@@ -173,12 +174,12 @@ int filesize(int fd)
 int read(int fd, void *buffer, unsigned size)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
+	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
 	{
 		return -1;
 	}
 
-		return;
+	return file_read(cur->file_list[fd], buffer, size);
 }
 int write(int fd, const void *buffer, unsigned size)
 {
@@ -197,7 +198,7 @@ void close(int fd)
 	struct thread *cur = thread_current();
 	if (cur->file_list[fd] != NULL)
 	{
-		free(cur->file_list[fd]);
+		file_close(cur->file_list[fd]);
 		cur->file_list[fd] = NULL;
 	}
 }
