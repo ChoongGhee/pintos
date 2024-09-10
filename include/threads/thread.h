@@ -132,6 +132,7 @@ struct thread
 	int exit_num;
 	struct file *file_list[LIST_MAX_SIZE];
 	int file_count;
+
 	bool isfork;
 
 	struct thread *parent;

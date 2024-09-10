@@ -147,8 +147,18 @@ int open(const char *file)
 	{
 		return -1;
 	}
-	cur->file_list[cur->file_count] = temp;
-	return cur->file_count++;
+	int idx = 3;
+	for (idx; idx <= LIST_MAX_SIZE; idx++)
+	{
+		if (cur->file_list[idx] == NULL)
+		{
+			cur->file_list[idx] = temp;
+			cur->file_count++;
+			break;
+		}
+	}
+
+	return idx;
 }
 int filesize(int fd)
 {
@@ -162,7 +172,13 @@ int filesize(int fd)
 }
 int read(int fd, void *buffer, unsigned size)
 {
-	return;
+	struct thread *cur = thread_current();
+	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
+	{
+		return -1;
+	}
+
+		return;
 }
 int write(int fd, const void *buffer, unsigned size)
 {
@@ -176,7 +192,15 @@ int write(int fd, const void *buffer, unsigned size)
 		return -1;
 	}
 }
-
+void close(int fd)
+{
+	struct thread *cur = thread_current();
+	if (cur->file_list[fd] != NULL)
+	{
+		free(cur->file_list[fd]);
+		cur->file_list[fd] = NULL;
+	}
+}
 // 시스템 콜 인자 검증 함수
 bool validate_syscall_args(struct intr_frame *f)
 {
@@ -266,7 +290,7 @@ void syscall_handler(struct intr_frame *f)
 		// f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
-		// f->R.rax = close(f->R.rdi);
+		close(f->R.rdi);
 		break;
 	default:
 		printf("Unexpected system call!\n");

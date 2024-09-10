@@ -285,20 +285,9 @@ tid_t thread_create(const char *name, int priority,
 		t->status = THREAD_RUNNING;
 	}
 
-	// t->file_list = malloc(sizeof(struct file *) * 128);
-	// if (t->file_list == NULL)
-	// {
-	// 	PANIC("Failed to allocate file list");
-	// }
 	t->file_count = 3;
 
-	// 재원 추가 wait() 자식 리스트 초기화
-	// t->child_list = malloc(sizeof(int) * 128);
-	// if (t->file_list == NULL)
-	// {
-	// 	PANIC("Failed to allocate child_list");
-	// }
-	t->file_count = 0;
+	t->child_num = 0;
 
 	// 재원 추가 자식 리스트 추가 wait()
 	struct thread *cur = thread_current();
