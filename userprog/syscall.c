@@ -174,7 +174,7 @@ int filesize(int fd)
 int read(int fd, void *buffer, unsigned size)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
 		return -1;
 	}
@@ -192,6 +192,36 @@ int write(int fd, const void *buffer, unsigned size)
 	{
 		return -1;
 	}
+	else
+	{
+		struct thread *cur = thread_current();
+		if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+		{
+			return -1;
+		}
+
+		return file_write(cur->file_list[fd], buffer, size);
+	}
+}
+void seek(int fd, unsigned position)
+{
+	struct thread *cur = thread_current();
+	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+	{
+		return -1;
+	}
+
+	return file_seek(fd, position);
+}
+unsigned tell(int fd)
+{
+	struct thread *cur = thread_current();
+	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+	{
+		return -1;
+	}
+
+	return file_tell(fd);
 }
 void close(int fd)
 {
