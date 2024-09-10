@@ -6,6 +6,9 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
+// 재원 추가
+#include "userprog/syscall.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -118,10 +121,12 @@ kill(struct intr_frame *f)
    can find more information about both of these in the
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
+
 // 핸들러(커널)에서 이 fault를 시킴
 static void
 page_fault(struct intr_frame *f)
 {
+
 	bool not_present; /* True: not-present page, false: writing r/o page. */
 	bool write;		  /* True: access was write, false: access was read. */
 	bool user;		  /* True: access by user, false: access by kernel. */
@@ -137,11 +142,36 @@ page_fault(struct intr_frame *f)
 	/* Turn interrupts back on (they were only off so that we could
 	   be assured of reading CR2 before it changed). */
 	intr_enable();
-
 	/* Determine cause. */
+	// 1 이면 페이지가 존재하지 않음, 0이면 존재
 	not_present = (f->error_code & PF_P) == 0;
+	// 1이면 쓰기 접근, 0이면 읽기 접근
 	write = (f->error_code & PF_W) != 0;
+	// 유저면 1 아니면 0
 	user = (f->error_code & PF_U) != 0;
+
+	// 재원 추가 만능 소스 by 민경
+	exit(-1);
+
+	// 재원 추가 User Memory Access
+	// if (user)
+	// {
+	// 	if (!is_user_vaddr(fault_addr) || fault_addr == NULL)
+	// 	{
+	// 		exit(-1); // 프로세스 종료
+	// 	}
+	// }
+	// else
+	// {
+
+	// 	if (f->rip == (uint64_t)get_user || f->rip == (uint64_t)put_user)
+	// 	{
+	// 		// Set error code and return address
+	// 		f->R.rax = -1;	 // 오류 코드 설정
+	// 		f->rip = f->rsp; // 함수 리턴 주소 설정
+	// 		return;
+	// 	}
+	// }
 
 #ifdef VM
 	/* For project 3 and later. */

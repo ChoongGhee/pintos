@@ -277,6 +277,49 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	// 재원 syscall
+#ifdef USERPROG
+	if (t == initial_thread)
+	{
+		t->parent = NULL;
+		t->status = THREAD_RUNNING;
+	}
+
+	// t->file_list = malloc(sizeof(struct file *) * 128);
+	// if (t->file_list == NULL)
+	// {
+	// 	PANIC("Failed to allocate file list");
+	// }
+	t->file_count = 3;
+
+	// 재원 추가 wait() 자식 리스트 초기화
+	// t->child_list = malloc(sizeof(int) * 128);
+	// if (t->file_list == NULL)
+	// {
+	// 	PANIC("Failed to allocate child_list");
+	// }
+	t->file_count = 0;
+
+	// 재원 추가 자식 리스트 추가 wait()
+	struct thread *cur = thread_current();
+	t->parent = cur;
+	if (cur->child_num <= LIST_MAX_SIZE)
+	{
+		for (int i = 0; i < LIST_MAX_SIZE; i++)
+		{
+			if (cur->child_list[i] == 0)
+			{
+				cur->child_list[i] = t->tid;
+				cur->child_num++;
+				break;
+			}
+		}
+	}
+	else
+	{
+		PANIC("there is not child_space!!");
+	}
+#endif
 	/* Add to run queue. */
 	thread_unblock(t);
 	preempt();
@@ -426,7 +469,13 @@ void thread_exit(void)
 	ASSERT(!intr_context());
 
 #ifdef USERPROG
-	process_exit();
+
+	struct thread *curr = thread_current();
+	if (curr->is_user)
+	{
+		printf("%s: exit(%d)\n", curr->name, curr->exit_num);
+		process_exit();
+	}
 #endif
 
 	/* Just set our status to dying and schedule another process.
@@ -621,6 +670,7 @@ init_thread(struct thread *t, const char *name, int priority)
 		// 재원 추가 prior-donate-multiple1
 		list_init(&t->lock_list);
 	}
+
 	// 스레드가 쓰는 메모리 영역에서 커널 stack과 구분 짓는 경계선 표시
 	t->magic = THREAD_MAGIC;
 }
@@ -816,7 +866,6 @@ allocate_tid(void)
 {
 	static tid_t next_tid = 1;
 	tid_t tid;
-
 	lock_acquire(&tid_lock);
 	tid = next_tid++;
 	lock_release(&tid_lock);
@@ -872,16 +921,6 @@ void cal_prior(struct thread *t)
 
 	t->priority = new_priority;
 }
-// void cal_recent_cpu(struct thread *t)
-// {
-// 	if (t == idle_thread) // idle_thread는 recent_cpu를 계산하지 않음
-// 		return;
-
-// 	int load_avg_twice = FP_MUL_INT(loadavg, 2);
-// 	int coefficient = FP_DIV(load_avg_twice, FP_ADD_INT(load_avg_twice, 1));
-
-// 	t->recent_cpu = FP_ADD_INT(FP_MUL(coefficient, t->recent_cpu), t->nice);
-// }
 void cal_recent_cpu(struct thread *t)
 {
 	if (t == idle_thread)
@@ -902,9 +941,6 @@ void cal_load_avg(void)
 	int old_loadavg = loadavg;
 	// 계산 결과를 0~1 사이로 제한
 	loadavg = FP_ADD(FP_MUL(FP_DIV_INT(INT_TO_FP(59), 60), loadavg), FP_DIV_INT(INT_TO_FP(ready_threads), 60));
-
-	// printf("Ready threads: %d, Old loadavg: %d, New loadavg: %d\n",
-	//    ready_threads, FP_TO_INT_NEAREST(old_loadavg * 100), FP_TO_INT_NEAREST(loadavg * 100));
 }
 
 void cur_cpu_increment(void)

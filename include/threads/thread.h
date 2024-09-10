@@ -9,7 +9,10 @@
 #include "vm/vm.h"
 #endif
 
+#define USERPROG
+
 /* States in a thread's life cycle. */
+#define LIST_MAX_SIZE 20
 // 1 : 쓰레드 실행 중, 2: 준비 중, 3: 블락됨(기다리는 중), 4: 뒤짐
 enum thread_status
 {
@@ -125,7 +128,19 @@ struct thread
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
+	// 재원 추가 syscall
 	int exit_num;
+	struct file *file_list[LIST_MAX_SIZE];
+	int file_count;
+	bool isfork;
+
+	struct thread *parent;
+	int child_list[LIST_MAX_SIZE];
+	int child_num;
+	int wait_id;
+
+	bool is_user;
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

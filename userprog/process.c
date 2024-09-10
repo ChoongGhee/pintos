@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -79,11 +80,24 @@ initd(void *f_name)
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
-tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
+tid_t process_fork(const char *name) //, struct intr_frame *if_ UNUSED
 {
 	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+	struct thread *cur = thread_current();
+	tid_t temp = thread_create(name, PRI_DEFAULT, __do_fork, cur);
+
+	enum intr_level old_level = intr_disable();
+	thread_block();
+	intr_set_level(old_level);
+
+	if (cur->isfork)
+	{
+		return temp;
+	}
+	else
+	{
+		return TID_ERROR;
+	}
 }
 
 #ifndef VM
@@ -112,6 +126,7 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
@@ -127,15 +142,41 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 static void
 __do_fork(void *aux)
 {
+	// 자식 프로세스 인터럽트 프레임 작성
 	struct intr_frame if_;
+	// aux 내 부모 스레드 값 받음.
 	struct thread *parent = (struct thread *)aux;
+	// 현재는 자식 프로세스 중임.
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	// 재원 추가 fork()
+	struct intr_frame *parent_if = &parent->tf;
 	bool succ = true;
 
+	// 재원 추가 fork (안정성을 위해)
 	/* 1. Read the cpu context to local stack. */
-	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	// memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = parent_if->R.rax;
+	if_.R.rcx = parent_if->R.rcx;
+	if_.R.rdx = parent_if->R.rdx;
+	if_.R.rsi = parent_if->R.rsi;
+	if_.R.rdi = parent_if->R.rdi;
+	if_.R.r8 = parent_if->R.r8;
+	if_.R.r9 = parent_if->R.r9;
+	if_.R.r10 = parent_if->R.r10;
+	if_.R.r11 = parent_if->R.r11;
+	if_.rip = parent_if->rip;
+	if_.cs = parent_if->cs;
+	if_.eflags = parent_if->eflags;
+
+	// 다음 레지스터들은 복사하지 않음:
+	// if_.rbx = parent_if->rbx;
+	// if_.rsp = parent_if->rsp;
+	// if_.rbp = parent_if->rbp;
+	// if_.r12 = parent_if->r12;
+	// if_.r13 = parent_if->r13;
+	// if_.r14 = parent_if->r14;
+	// if_.r15 = parent_if->r15;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -152,22 +193,40 @@ __do_fork(void *aux)
 		goto error;
 #endif
 
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+	// 재원 추가 fork() 자식은 rax값 반환이 tid가 아님.
+	if_.R.rax = 0;
+
+	// 재원 추가 fd_복사
+	for (int i = 3; i < LIST_MAX_SIZE; i++)
+	{
+		if (parent->file_list[i] != NULL)
+		{
+			current->file_list[i] = file_duplicate(parent->file_list[i]);
+			if (current->file_list[i] == NULL)
+			{
+				goto error;
+			}
+		}
+	}
 
 	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
+	{
+		parent->isfork = true;
+		thread_unblock(parent);
 		do_iret(&if_);
+	}
 error:
+	// 재원 추가 fork 메모리 초과라면 해당 자식프로세스 끄기
+	parent->isfork = false;
+	current->exit_num = -1;
+	thread_unblock(parent);
 	thread_exit();
 }
 
-/* Switch the current execution context to the f_name.
+/* Switch the current execution context to thㄲe f_name.
  * Returns -1 on fail. */
 int process_exec(void *f_name)
 {
@@ -193,7 +252,9 @@ int process_exec(void *f_name)
 	if (!success)
 		return -1;
 
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* Start switched process. */
+	// _if 쏴줌. 메뉴판
 	do_iret(&_if);
 	NOT_REACHED();
 }
@@ -207,31 +268,47 @@ int process_exec(void *f_name)
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
-int process_wait(tid_t child_tid UNUSED)
+int process_wait(tid_t child_tid)
 {
 	// 재원 추가
-	int i = 0;
-	while (i < 1 << 29)
+	struct thread *cur = thread_current();
+
+	int isfind = false;
+	for (int i = 0; i < LIST_MAX_SIZE; i++)
 	{
-		i++;
+		if (cur->child_list[i] == child_tid)
+		{
+			cur->wait_id = child_tid;
+			isfind = true;
+			break;
+		}
+		// printf("current thread : %s, child_num :%d\n", cur->name, cur->child_list[i]);
 	}
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	return -1;
+
+	if (isfind)
+	{
+		enum intr_level old_level = intr_disable();
+		thread_block();
+		intr_set_level(old_level);
+		isfind = cur->wait_id;
+		cur->wait_id = 0;
+
+		return isfind;
+	}
+	else
+	{
+		return -1;
+	}
+	// int i = 0;
+	// while (i < 1 << 29)
+	// {
+	// 	i++;
+	// }
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
-	struct thread *curr = thread_current();
-
-	printf("%s: exit(%d)\n", curr->name, curr->exit_num);
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-
 	process_cleanup();
 }
 
@@ -351,10 +428,10 @@ load(const char *file_name, struct intr_frame *if_)
 	int i;
 
 	// 재원 추가 argument
-	char *temp_token, *trash_svg;
+	char *trash_svg;
 	char *temp_filename = palloc_get_page(0);
 	strlcpy(temp_filename, file_name, PGSIZE);
-	temp_token = strtok_r(file_name, " ", &trash_svg);
+	strtok_r(file_name, " ", &trash_svg);
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create();
@@ -461,7 +538,7 @@ load(const char *file_name, struct intr_frame *if_)
 		argc++;
 	}
 
-	// 중간 패딩 및 경계먄
+	// 중간 패딩 및 경계면
 	if_->rsp = if_->rsp & ~7ULL;
 	if_->rsp -= 8;
 
@@ -481,6 +558,8 @@ load(const char *file_name, struct intr_frame *if_)
 	if_->rsp -= 8;
 	// argc값 rdi에 세팅
 	if_->R.rdi = argc;
+	// 메모리 해제
+	palloc_free_page(temp_filename);
 
 	success = true;
 
