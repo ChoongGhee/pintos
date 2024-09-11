@@ -146,6 +146,8 @@ struct thread
 
 	bool isuser;
 
+	struct file *exec_file;
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

@@ -82,7 +82,10 @@ pid_t fork(const char *thread_name, struct intr_frame *f)
 int exec(const char *cmd_line)
 {
 	// 만약 cml_line이 이름과 인자를 주는 명령어라고 가정한 방식임
-	return process_exec(cmd_line);
+	char *tempcopy = palloc_get_page(2);
+	strlcpy(tempcopy, cmd_line, PGSIZE);
+
+	return process_exec(tempcopy);
 }
 int wait(pid_t pid)
 {

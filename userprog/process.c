@@ -20,6 +20,8 @@
 #include "intrinsic.h"
 
 #define USERPROG
+// 재원 추가
+#include "user/syscall.h"
 
 #ifdef VM
 #include "vm/vm.h"
@@ -234,23 +236,16 @@ int process_exec(void *f_name)
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	// // 재원 추가 fork
-	// struct thread *cur = thread_current();
-	// cur->user_if = &_if;
-
 	/* We first kill the current context */
 	process_cleanup();
 
 	/* And then load the binary */
 	success = load(file_name, &_if);
 
-	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
 		return -1;
 
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-	/* Start switched process. */
 	// _if 쏴줌. 메뉴판
 	do_iret(&_if);
 	NOT_REACHED();
@@ -270,8 +265,6 @@ int process_wait(tid_t child_tid)
 	// 재원 추가
 	struct thread *cur = thread_current();
 
-	// printf("cur name %s\n", cur->name);
-
 	struct thread *child = NULL;
 
 	struct list_elem *e;
@@ -290,22 +283,21 @@ int process_wait(tid_t child_tid)
 		return -1; // 자식을 찾지 못했거나 이미 wait한 자식
 	}
 
+	// 자식 프로세스가 아직 종료되지 않은 경우
+	if (child->status != THREAD_DYING)
+	{
+		child->wakeup_parent = true; // 자식이 종료될 때 부모를 깨우도록 설정
+		enum intr_level old_level = intr_disable();
+		thread_block(); // 부모 프로세스를 블록
+		intr_set_level(old_level);
+	}
+
+	// 자식 프로세스가 종료된 후, 종료 상태를 반환
 	int reval = child->exit_value;
 
-	if (child->status == THREAD_DYING)
-	{
-		list_remove(e);
-		palloc_free_page(child);
-	}
-	else
-	{
-		child->wakeup_parent = true;
-		enum intr_level old_level = intr_disable();
-		thread_block();
-		intr_set_level(old_level);
-		list_remove(e);
-		palloc_free_page(child);
-	}
+	// 자식 프로세스의 메모리 해제
+	list_remove(e);
+	palloc_free_page(child);
 
 	return reval;
 }
@@ -483,6 +475,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 	/* Open executable file. */
 	file = filesys_open(file_name);
+	// file = open(file_name);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -604,10 +597,19 @@ load(const char *file_name, struct intr_frame *if_)
 	palloc_free_page(temp_filename);
 
 	success = true;
-
 done:
 	/* We arrive here whether the load is successful or not. */
+	// 재원 추가
+	// if (success)
+	// {
+	// 	t->exec_file = file;
+	// 	file_deny_write(file);
+	// }
+	// else
+	// {
+	// 	t->exec_file = NULL;
 	file_close(file);
+	// }
 	return success;
 }
 
