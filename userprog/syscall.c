@@ -70,57 +70,19 @@ void halt(void)
 }
 void exit(int status)
 {
-	struct thread *cur = thread_current();
-	cur->exit_num = status;
-	if (cur->parent != NULL)
-	{
-		if (cur->parent->status == THREAD_BLOCKED && cur->parent->wait_id == cur->tid)
-		{
-			cur->parent->wait_id = status;
-			thread_unblock(cur->parent);
-		}
-	}
+	thread_current()->exit_value = status;
+	thread_current()->isuser = true;
 	thread_exit();
 }
-pid_t fork(const char *thread_name)
+pid_t fork(const char *thread_name, struct intr_frame *f)
 {
-	return process_fork(thread_name);
+	struct thread *cur = thread_current();
+	return process_fork(thread_name, f);
 }
 int exec(const char *cmd_line)
 {
 	// 만약 cml_line이 이름과 인자를 주는 명령어라고 가정한 방식임
-	char *fn_copy;
-
-	fn_copy = palloc_get_page(0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-
-	strlcpy(fn_copy, cmd_line, PGSIZE);
-	// 재원 추가 passing
-	char *trash_svg;
-	strtok_r(cmd_line, " ", &trash_svg);
-
-	pid_t ischild = fork(cmd_line);
-	// 자식 프로세스 일 때
-	if (ischild == 0)
-	{
-		if (process_exec(fn_copy) < 0)
-		{
-			palloc_free_page(fn_copy);
-			exit(-1);
-		}
-	}
-	else if (ischild > 0)
-	{
-		palloc_free_page(fn_copy);
-		return ischild;
-	}
-	else
-	{
-		palloc_free_page(fn_copy);
-		// fork 실패
-		return -1;
-	}
+	return process_exec(cmd_line);
 }
 int wait(pid_t pid)
 {
@@ -148,6 +110,7 @@ int open(const char *file)
 	{
 		return -1;
 	}
+
 	int idx = 3;
 	for (idx; idx <= LIST_MAX_SIZE; idx++)
 	{
@@ -275,7 +238,7 @@ void syscall_handler(struct intr_frame *f)
 	{
 		exit(-1);
 	}
-	thread_current()->is_user = true;
+
 	switch (f->R.rax)
 	{
 	case SYS_HALT:
@@ -285,7 +248,7 @@ void syscall_handler(struct intr_frame *f)
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
-		f->R.rax = fork(f->R.rdi);
+		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC:
 		if (f->R.rax = exec(f->R.rdi) == -1)
@@ -315,10 +278,10 @@ void syscall_handler(struct intr_frame *f)
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
-		// f->R.rax = seek(f->R.rdi, f->R.rsi);
+		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL:
-		// f->R.rax = tell(f->R.rdi);
+		f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);

@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 
+#define USERPROG
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -80,24 +82,23 @@ initd(void *f_name)
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
-tid_t process_fork(const char *name) //, struct intr_frame *if_ UNUSED
+tid_t process_fork(const char *name, struct intr_frame *if_)
 {
 	/* Clone current thread to new thread.*/
 	struct thread *cur = thread_current();
-	tid_t temp = thread_create(name, PRI_DEFAULT, __do_fork, cur);
+	cur->user_if = if_;
+
+	int temp = thread_create(name, PRI_DEFAULT, __do_fork, cur);
 
 	enum intr_level old_level = intr_disable();
 	thread_block();
 	intr_set_level(old_level);
 
-	if (cur->isfork)
-	{
-		return temp;
-	}
-	else
+	if (if_->R.rax == TID_ERROR)
 	{
 		return TID_ERROR;
 	}
+	return temp;
 }
 
 #ifndef VM
@@ -112,24 +113,35 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	void *newpage;
 	bool writable;
 
+	// 재원 추가 fork
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if (is_kernel_vaddr(va))
+		return true;
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL)
+		return false;
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_ZERO);
+	if (newpage == NULL)
+		return false;
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-
+	memcpy(newpage, parent_page, PGSIZE);
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	writable = is_writable(pte);
 
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		palloc_free_page(newpage);
+		return false;
 	}
 	return true;
 }
@@ -150,33 +162,12 @@ __do_fork(void *aux)
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	// 재원 추가 fork()
-	struct intr_frame *parent_if = &parent->tf;
+	struct intr_frame *parent_if = parent->user_if;
 	bool succ = true;
 
 	// 재원 추가 fork (안정성을 위해)
 	/* 1. Read the cpu context to local stack. */
-	// memcpy(&if_, parent_if, sizeof(struct intr_frame));
-	if_.R.rax = parent_if->R.rax;
-	if_.R.rcx = parent_if->R.rcx;
-	if_.R.rdx = parent_if->R.rdx;
-	if_.R.rsi = parent_if->R.rsi;
-	if_.R.rdi = parent_if->R.rdi;
-	if_.R.r8 = parent_if->R.r8;
-	if_.R.r9 = parent_if->R.r9;
-	if_.R.r10 = parent_if->R.r10;
-	if_.R.r11 = parent_if->R.r11;
-	if_.rip = parent_if->rip;
-	if_.cs = parent_if->cs;
-	if_.eflags = parent_if->eflags;
-
-	// 다음 레지스터들은 복사하지 않음:
-	// if_.rbx = parent_if->rbx;
-	// if_.rsp = parent_if->rsp;
-	// if_.rbp = parent_if->rbp;
-	// if_.r12 = parent_if->r12;
-	// if_.r13 = parent_if->r13;
-	// if_.r14 = parent_if->r14;
-	// if_.r15 = parent_if->r15;
+	memcpy(&if_, parent_if, sizeof(struct intr_frame));
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -193,9 +184,6 @@ __do_fork(void *aux)
 		goto error;
 #endif
 
-	// 재원 추가 fork() 자식은 rax값 반환이 tid가 아님.
-	if_.R.rax = 0;
-
 	// 재원 추가 fd_복사
 	for (int i = 3; i < LIST_MAX_SIZE; i++)
 	{
@@ -209,20 +197,25 @@ __do_fork(void *aux)
 		}
 	}
 
+	current->file_count = parent->file_count;
+
 	process_init();
+	// 재원 추가 fork() 자식은 rax값 반환이 tid가 아님.
+	if_.R.rax = 0;
+	thread_unblock(parent);
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 	{
 		parent->isfork = true;
-		thread_unblock(parent);
 		do_iret(&if_);
 	}
 error:
 	// 재원 추가 fork 메모리 초과라면 해당 자식프로세스 끄기
 	parent->isfork = false;
-	current->exit_num = -1;
+	current->exit_value = -1;
 	thread_unblock(parent);
+	// preempt();
 	thread_exit();
 }
 
@@ -240,6 +233,10 @@ int process_exec(void *f_name)
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
+
+	// // 재원 추가 fork
+	// struct thread *cur = thread_current();
+	// cur->user_if = &_if;
 
 	/* We first kill the current context */
 	process_cleanup();
@@ -273,42 +270,87 @@ int process_wait(tid_t child_tid)
 	// 재원 추가
 	struct thread *cur = thread_current();
 
-	int isfind = false;
-	for (int i = 0; i < LIST_MAX_SIZE; i++)
+	// printf("cur name %s\n", cur->name);
+
+	struct thread *child = NULL;
+
+	struct list_elem *e;
+	for (e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e = list_next(e))
 	{
-		if (cur->child_list[i] == child_tid)
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t->tid == child_tid)
 		{
-			cur->wait_id = child_tid;
-			isfind = true;
+			child = t;
 			break;
 		}
-		// printf("current thread : %s, child_num :%d\n", cur->name, cur->child_list[i]);
 	}
 
-	if (isfind)
+	if (child == NULL)
 	{
-		enum intr_level old_level = intr_disable();
-		thread_block();
-		intr_set_level(old_level);
-		isfind = cur->wait_id;
-		cur->wait_id = 0;
+		return -1; // 자식을 찾지 못했거나 이미 wait한 자식
+	}
 
-		return isfind;
+	int reval = child->exit_value;
+
+	if (child->status == THREAD_DYING)
+	{
+		list_remove(e);
+		palloc_free_page(child);
 	}
 	else
 	{
-		return -1;
+		child->wakeup_parent = true;
+		enum intr_level old_level = intr_disable();
+		thread_block();
+		intr_set_level(old_level);
+		list_remove(e);
+		palloc_free_page(child);
 	}
-	// int i = 0;
-	// while (i < 1 << 29)
-	// {
-	// 	i++;
-	// }
+
+	return reval;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
+	struct thread *cur = thread_current();
+
+	if (cur->isuser)
+	{
+		printf("%s: exit(%d)\n", cur->name, cur->exit_value);
+	}
+
+#ifdef USERPROG
+
+	// 재원 추가 wait() 뒤진 자식 정리 + 연 끊기
+	while (!list_empty(&cur->child_list))
+	{
+		struct thread *child = list_entry(list_pop_front(&cur->child_list), struct thread, child_elem);
+		if (child->status == THREAD_DYING)
+		{
+			palloc_free_page(child);
+		}
+		else
+		{
+			child->parent = NULL;
+		}
+	}
+
+	if (cur->parent != NULL && cur->wakeup_parent)
+	{
+		thread_unblock(cur->parent);
+	}
+
+	for (int i = 0; i < LIST_MAX_SIZE; i++)
+	{
+		if (cur->file_list[i] != NULL)
+		{
+			file_close(cur->file_list[i]);
+		}
+	}
+
+#endif
+
 	process_cleanup();
 }
 

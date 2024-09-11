@@ -129,18 +129,22 @@ struct thread
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
 	// 재원 추가 syscall
-	int exit_num;
+	int exit_value;
 	struct file *file_list[LIST_MAX_SIZE];
 	int file_count;
 
 	bool isfork;
 
 	struct thread *parent;
-	int child_list[LIST_MAX_SIZE];
-	int child_num;
-	int wait_id;
+	struct list child_list;
+	struct list_elem child_elem;
 
-	bool is_user;
+	int child_num;
+	bool wakeup_parent;
+
+	struct intr_frame *user_if;
+
+	bool isuser;
 
 #endif
 #ifdef VM

@@ -282,7 +282,6 @@ tid_t thread_create(const char *name, int priority,
 	if (t == initial_thread)
 	{
 		t->parent = NULL;
-		t->status = THREAD_RUNNING;
 	}
 
 	t->file_count = 3;
@@ -292,22 +291,8 @@ tid_t thread_create(const char *name, int priority,
 	// 재원 추가 자식 리스트 추가 wait()
 	struct thread *cur = thread_current();
 	t->parent = cur;
-	if (cur->child_num <= LIST_MAX_SIZE)
-	{
-		for (int i = 0; i < LIST_MAX_SIZE; i++)
-		{
-			if (cur->child_list[i] == 0)
-			{
-				cur->child_list[i] = t->tid;
-				cur->child_num++;
-				break;
-			}
-		}
-	}
-	else
-	{
-		PANIC("there is not child_space!!");
-	}
+	list_insert_ordered(&cur->child_list, &t->child_elem, &thread_greater_fun, (void *)offsetof(struct thread, priority));
+	cur->child_num++;
 #endif
 	/* Add to run queue. */
 	thread_unblock(t);
@@ -459,12 +444,8 @@ void thread_exit(void)
 
 #ifdef USERPROG
 
-	struct thread *curr = thread_current();
-	if (curr->is_user)
-	{
-		printf("%s: exit(%d)\n", curr->name, curr->exit_num);
-		process_exit();
-	}
+	process_exit();
+
 #endif
 
 	/* Just set our status to dying and schedule another process.
@@ -642,6 +623,11 @@ init_thread(struct thread *t, const char *name, int priority)
 	strlcpy(t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
+
+#ifdef USERPROG
+	list_init(&t->child_list);
+	t->exit_value = -2;
+#endif
 
 	// 재원 추가 mlfqs
 	if (thread_mlfqs)
@@ -840,7 +826,10 @@ schedule(void)
 				list_remove(&curr->all_elem);
 			}
 			ASSERT(curr != next);
-			list_push_back(&destruction_req, &curr->elem);
+			if (curr->parent == NULL)
+			{
+				list_push_back(&destruction_req, &curr->elem);
+			}
 		}
 
 		/* Before switching the thread, we first save the information
