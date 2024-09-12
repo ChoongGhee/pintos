@@ -242,7 +242,7 @@ int process_exec(void *f_name)
 	/* And then load the binary */
 	success = load(file_name, &_if);
 
-	palloc_free_page(file_name);
+	palloc_free_page(f_name);
 	if (!success)
 		return -1;
 
@@ -262,6 +262,8 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid)
 {
+	enum intr_level old_level = intr_disable();
+
 	// 재원 추가
 	struct thread *cur = thread_current();
 
@@ -280,6 +282,7 @@ int process_wait(tid_t child_tid)
 
 	if (child == NULL)
 	{
+		intr_set_level(old_level);
 		return -1; // 자식을 찾지 못했거나 이미 wait한 자식
 	}
 
@@ -287,9 +290,7 @@ int process_wait(tid_t child_tid)
 	if (child->status != THREAD_DYING)
 	{
 		child->wakeup_parent = true; // 자식이 종료될 때 부모를 깨우도록 설정
-		enum intr_level old_level = intr_disable();
-		thread_block(); // 부모 프로세스를 블록
-		intr_set_level(old_level);
+		thread_block();				 // 부모 프로세스를 블록
 	}
 
 	// 자식 프로세스가 종료된 후, 종료 상태를 반환
@@ -298,6 +299,8 @@ int process_wait(tid_t child_tid)
 	// 자식 프로세스의 메모리 해제
 	list_remove(e);
 	palloc_free_page(child);
+
+	intr_set_level(old_level);
 
 	return reval;
 }
@@ -314,6 +317,11 @@ void process_exit(void)
 
 #ifdef USERPROG
 
+	if (cur->exec_file != NULL)
+	{
+		file_close(cur->exec_file);
+	}
+
 	// 재원 추가 wait() 뒤진 자식 정리 + 연 끊기
 	while (!list_empty(&cur->child_list))
 	{
@@ -323,7 +331,8 @@ void process_exit(void)
 			palloc_free_page(child);
 		}
 		else
-		{
+		{ // 작동 중이라면 기다림
+			// wait(child->tid);
 			child->parent = NULL;
 		}
 	}
@@ -333,7 +342,7 @@ void process_exit(void)
 		thread_unblock(cur->parent);
 	}
 
-	for (int i = 0; i < LIST_MAX_SIZE; i++)
+	for (int i = 3; i < LIST_MAX_SIZE; i++)
 	{
 		if (cur->file_list[i] != NULL)
 		{
@@ -600,16 +609,17 @@ load(const char *file_name, struct intr_frame *if_)
 done:
 	/* We arrive here whether the load is successful or not. */
 	// 재원 추가
-	// if (success)
-	// {
-	// 	t->exec_file = file;
-	// 	file_deny_write(file);
-	// }
-	// else
-	// {
-	// 	t->exec_file = NULL;
-	file_close(file);
-	// }
+	if (success)
+	{
+		t->exec_file = file;
+		// file_deny_write(file);
+		// file_close(t->exec_file);
+	}
+	else
+	{
+		t->exec_file = NULL;
+		file_close(file);
+	}
 	return success;
 }
 

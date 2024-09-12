@@ -626,7 +626,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
 #ifdef USERPROG
 	list_init(&t->child_list);
-	t->exit_value = -2;
+	t->exit_value = 0;
 #endif
 
 	// 재원 추가 mlfqs

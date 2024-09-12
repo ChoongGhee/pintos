@@ -12,7 +12,7 @@
 #define USERPROG
 
 /* States in a thread's life cycle. */
-#define LIST_MAX_SIZE 20
+#define LIST_MAX_SIZE 10
 // 1 : 쓰레드 실행 중, 2: 준비 중, 3: 블락됨(기다리는 중), 4: 뒤짐
 enum thread_status
 {

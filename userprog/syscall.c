@@ -13,8 +13,13 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 
+#include "threads/synch.h"
+#include "string.h"
+
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
+
+struct lock filesys_lock;
 
 /* System call.
  *
@@ -62,6 +67,8 @@ void syscall_init(void)
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_init(&filesys_lock);
 }
 // 재원 추가
 void halt(void)
@@ -71,7 +78,6 @@ void halt(void)
 void exit(int status)
 {
 	thread_current()->exit_value = status;
-	thread_current()->isuser = true;
 	thread_exit();
 }
 pid_t fork(const char *thread_name, struct intr_frame *f)
@@ -84,6 +90,9 @@ int exec(const char *cmd_line)
 	// 만약 cml_line이 이름과 인자를 주는 명령어라고 가정한 방식임
 	char *tempcopy = palloc_get_page(2);
 	strlcpy(tempcopy, cmd_line, PGSIZE);
+
+	if (thread_current()->exec_file != NULL)
+		file_close(thread_current()->exec_file);
 
 	return process_exec(tempcopy);
 }
@@ -114,23 +123,37 @@ int open(const char *file)
 		return -1;
 	}
 
+	bool find = false;
+
 	int idx = 3;
 	for (idx; idx <= LIST_MAX_SIZE; idx++)
 	{
 		if (cur->file_list[idx] == NULL)
 		{
 			cur->file_list[idx] = temp;
+			if (!strcmp(cur->name, file))
+				file_deny_write(temp);
+
 			cur->file_count++;
+			find = true;
 			break;
 		}
 	}
 
-	return idx;
+	if (find)
+	{
+		return idx;
+	}
+	else
+	{
+		file_close(temp);
+		return -1;
+	}
 }
 int filesize(int fd)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
+	if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
 		return -1;
 	}
@@ -140,62 +163,81 @@ int filesize(int fd)
 int read(int fd, void *buffer, unsigned size)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
+
+	if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
 		return -1;
 	}
+	int val = file_read(cur->file_list[fd], buffer, size);
 
-	return file_read(cur->file_list[fd], buffer, size);
+	return val;
 }
 int write(int fd, const void *buffer, unsigned size)
 {
+
+	// lock_acquire(&filesys_lock);
+	// printf("\ncur name %s, fd_num %d this start\n", thread_current()->name, fd);
+
 	if (fd == STDOUT_FILENO)
 	{
+		// printf("\ncur name %s, fd_num %d this is STDOUT_FILENO\n", thread_current()->name, fd);
 		putbuf((char *)buffer, size);
+		// lock_release(&filesys_lock);
 		return size;
 	}
-	else if (fd == STDIN_FILENO || fd == 2)
+	else if (fd == STDIN_FILENO)
 	{
+		// printf("\ncur name %s, fd_num %d this is STDINFILENO\n", thread_current()->name, fd);
+		// lock_release(&filesys_lock);
 		return -1;
 	}
 	else
 	{
 		struct thread *cur = thread_current();
-		if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+		if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 		{
+			// printf("\ncur name %s, fd_num %d this is Error\n", thread_current()->name, fd);
+			// lock_release(&filesys_lock);
 			return -1;
 		}
+		int temp = file_write(cur->file_list[fd], buffer, size);
+		// lock_release(&filesys_lock);
 
-		return file_write(cur->file_list[fd], buffer, size);
+		// printf("\ncur name %s, fd_num %d this is file_write\n", thread_current()->name, fd);
+		return temp;
 	}
 }
 void seek(int fd, unsigned position)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+	if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
 		return -1;
 	}
 
-	return file_seek(fd, position);
+	file_seek(cur->file_list[fd], position);
 }
 unsigned tell(int fd)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL || cur->file_list[fd]->deny_write)
+	if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
 		return -1;
 	}
 
-	return file_tell(fd);
+	return file_tell(cur->file_list[fd]);
 }
 void close(int fd)
 {
+	if (fd < 2 || fd >= LIST_MAX_SIZE)
+		return;
 	struct thread *cur = thread_current();
+
 	if (cur->file_list[fd] != NULL)
 	{
 		file_close(cur->file_list[fd]);
 		cur->file_list[fd] = NULL;
+		cur->file_count--;
 	}
 }
 // 시스템 콜 인자 검증 함수
@@ -237,6 +279,7 @@ bool validate_syscall_args(struct intr_frame *f)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f)
 {
+	thread_current()->isuser = true;
 	if (!validate_syscall_args(f))
 	{
 		exit(-1);
