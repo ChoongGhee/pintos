@@ -96,8 +96,10 @@ tid_t process_fork(const char *name, struct intr_frame *if_)
 	thread_block();
 	intr_set_level(old_level);
 
-	if (if_->R.rax == TID_ERROR)
+	if (cur->isfork == 0)
 	{
+		// printf("\nfork Error\n");
+
 		return TID_ERROR;
 	}
 	return temp;
@@ -214,6 +216,7 @@ __do_fork(void *aux)
 	}
 error:
 	// 재원 추가 fork 메모리 초과라면 해당 자식프로세스 끄기
+	// printf("\nfork Error\n");
 	parent->isfork = false;
 	current->exit_value = -1;
 	thread_unblock(parent);
@@ -262,7 +265,6 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid)
 {
-	enum intr_level old_level = intr_disable();
 
 	// 재원 추가
 	struct thread *cur = thread_current();
@@ -282,7 +284,7 @@ int process_wait(tid_t child_tid)
 
 	if (child == NULL)
 	{
-		intr_set_level(old_level);
+
 		return -1; // 자식을 찾지 못했거나 이미 wait한 자식
 	}
 
@@ -290,7 +292,9 @@ int process_wait(tid_t child_tid)
 	if (child->status != THREAD_DYING)
 	{
 		child->wakeup_parent = true; // 자식이 종료될 때 부모를 깨우도록 설정
-		thread_block();				 // 부모 프로세스를 블록
+		enum intr_level old_level = intr_disable();
+		thread_block(); // 부모 프로세스를 블록
+		intr_set_level(old_level);
 	}
 
 	// 자식 프로세스가 종료된 후, 종료 상태를 반환
@@ -300,8 +304,6 @@ int process_wait(tid_t child_tid)
 	list_remove(e);
 	palloc_free_page(child);
 
-	intr_set_level(old_level);
-
 	return reval;
 }
 
@@ -309,6 +311,8 @@ int process_wait(tid_t child_tid)
 void process_exit(void)
 {
 	struct thread *cur = thread_current();
+
+	process_cleanup();
 
 	if (cur->isuser)
 	{
@@ -351,8 +355,6 @@ void process_exit(void)
 	}
 
 #endif
-
-	process_cleanup();
 }
 
 /* Free the current process's resources. */

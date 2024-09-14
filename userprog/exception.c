@@ -150,7 +150,7 @@ page_fault(struct intr_frame *f)
 	// 유저면 1 아니면 0
 	user = (f->error_code & PF_U) != 0;
 
-	// 재원 추가 만능 소스 by 민경
+	// 재원 추가 만능 소스
 	exit(-1);
 
 	// 재원 추가 User Memory Access

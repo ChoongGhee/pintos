@@ -114,12 +114,14 @@ int make_children(void)
     {
       snprintf(child_name, sizeof child_name, "%s_%d_%s", "child", i, "X");
       pid = fork(child_name);
+      // printf("\nafter fork : PID %d\n", pid);
       if (pid > 0 && wait(pid) != -1)
       {
         fail("crashed child should return -1.");
       }
       else if (pid == 0)
       {
+        // printf("\ni'm child : PID %d\n", pid);
         consume_some_resources_and_die();
         fail("Unreachable");
       }
@@ -129,14 +131,19 @@ int make_children(void)
     pid = fork(child_name);
     if (pid < 0)
     {
+      // printf("\nnever here : PID %d\n", pid);
       exit(i);
     }
     else if (pid == 0)
     {
+      // printf("\nhello here : PID %d\n", pid);
+
       consume_some_resources();
     }
     else
     {
+      // printf("\nim breake : PID %d\n", pid);
+
       break;
     }
   }
