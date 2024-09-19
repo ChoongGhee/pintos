@@ -1,7 +1,7 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 // 재원 추가
-#define USERPROG
+// #define USERPROG
 #include <stdbool.h>
 #include <stdint.h>
 #include "process.h"
@@ -9,9 +9,7 @@
 void syscall_init(void);
 typedef int pid_t;
 
-// 재원 추가
-int64_t get_user(const uint8_t *uaddr);
-bool put_user(uint8_t *udst, uint8_t byte);
+// // 재원 추가
 // void halt(void);
 // void exit(int status);
 // pid_t fork(const char *thread_name);

@@ -254,7 +254,7 @@ run_task(char **argv)
 		run_test(task);
 	}
 	else
-	{
+	{	
 		process_wait(process_create_initd(task));
 	}
 #else

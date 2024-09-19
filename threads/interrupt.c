@@ -277,7 +277,6 @@ void intr_yield_on_return(void)
 	ASSERT(intr_context());
 	yield_on_return = true;
 
-	// 재원 추가 /? 모르겟더
 }
 
 /* 8259A Programmable Interrupt Controller. */

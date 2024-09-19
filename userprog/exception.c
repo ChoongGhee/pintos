@@ -7,7 +7,7 @@
 #include "intrinsic.h"
 
 // 재원 추가
-#include "userprog/syscall.h"
+// #include "userprog/syscall.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -153,25 +153,6 @@ page_fault(struct intr_frame *f)
 	// 재원 추가 만능 소스
 	exit(-1);
 
-	// 재원 추가 User Memory Access
-	// if (user)
-	// {
-	// 	if (!is_user_vaddr(fault_addr) || fault_addr == NULL)
-	// 	{
-	// 		exit(-1); // 프로세스 종료
-	// 	}
-	// }
-	// else
-	// {
-
-	// 	if (f->rip == (uint64_t)get_user || f->rip == (uint64_t)put_user)
-	// 	{
-	// 		// Set error code and return address
-	// 		f->R.rax = -1;	 // 오류 코드 설정
-	// 		f->rip = f->rsp; // 함수 리턴 주소 설정
-	// 		return;
-	// 	}
-	// }
 
 #ifdef VM
 	/* For project 3 and later. */

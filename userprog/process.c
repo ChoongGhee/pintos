@@ -19,9 +19,8 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 
-#define USERPROG
 // 재원 추가
-#include "user/syscall.h"
+// #include "user/syscall.h"
 
 #ifdef VM
 #include "vm/vm.h"

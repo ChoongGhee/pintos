@@ -11,6 +11,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "userprog/process.h"
 
 // 재원 추가
 // Fixed_point Real Arithmetic
@@ -27,9 +28,6 @@
 #define FP_DIV(x, y) (((int64_t)(x)) * F / (y))									// Divide x by y: ((int64_t) x) * f / y
 #define FP_DIV_INT(x, n) ((x) / (n))											// Divide x by n: x / n
 
-#ifdef USERPROG
-#include "userprog/process.h"
-#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -826,10 +824,14 @@ schedule(void)
 				list_remove(&curr->all_elem);
 			}
 			ASSERT(curr != next);
+			#ifdef USERPROG
 			if (curr->parent == NULL)
 			{
 				list_push_back(&destruction_req, &curr->elem);
 			}
+			#else
+				list_push_back(&destruction_req, &curr->elem);
+			#endif
 		}
 
 		/* Before switching the thread, we first save the information

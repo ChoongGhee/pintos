@@ -9,7 +9,6 @@
 #include "vm/vm.h"
 #endif
 
-#define USERPROG
 
 /* States in a thread's life cycle. */
 #define LIST_MAX_SIZE 10
