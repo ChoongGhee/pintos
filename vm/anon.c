@@ -61,5 +61,7 @@ static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	//재원 추가
+	// palloc_free_page(page->frame->kva);
+	// free(page->frame);
 	return true;
 }

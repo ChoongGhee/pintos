@@ -9,7 +9,7 @@
 #include "vm/anon.h"
 #include "vm/file.h"
 #include "threads/mmu.h"
-
+#include "userprog/syscall.h"
 // 재원 추가 먼저 선언
 uint64_t page_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
@@ -143,8 +143,8 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
                 struct supplemental_page_table *src) {
-        // dst 해시 테이블 초기화
-        hash_init(&dst->hash_table, page_hash, page_less, NULL);
+        // dst 해시 테이블 초기화 이전에 함.
+        // hash_init(&dst->hash_table, page_hash, page_less, NULL);
 
         // src 해시 테이블 순회
         struct hash_iterator i;
@@ -153,31 +153,16 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
                 struct page *original_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
                 // 새로운 페이지 구조체 할당
-                struct page *copy_page = malloc(sizeof(struct page));
-                if (copy_page == NULL)
-                        return false;
-
-                // 페이지 구조체 복사 (깊은 복사)
-                memcpy(copy_page, original_page, sizeof(struct page));
-
-                // 만약 페이지가 실제 메모리 프레임을 가지고 있다면 해당 프레임도 복사해야 함
-                // 예시로 frame 복사 로직 추가
-                if (original_page->frame != NULL) {
-                        copy_page->frame = malloc(PAGE_SIZE);
-                        if (copy_page->frame == NULL) {
-                                free(copy_page);
-                                return false;
-                        }
-                        memcpy(copy_page->frame, original_page->frame, PAGE_SIZE);  // 실제 메모리 복사
-                }
-
-                // hash_elem은 페이지마다 따로 관리되므로 copy_page의 hash_elem을 사용해야 함
-                if (hash_insert(&dst->hash_table, &copy_page->hash_elem) != NULL) {
-						//중복된 것이 있어서 해제
-                        free(copy_page->frame);  
-                        free(copy_page);  
-                        return false;
-                }
+                if (!vm_alloc_page_with_initializer(original_page->operations->type == VM_ANON ? VM_ANON : VM_FILE, original_page->va, original_page->writable, NULL, NULL))
+					return false;
+				
+				struct page* new_page = spt_find_page(dst, original_page->va);
+				if(!vm_do_claim_page(new_page))
+					return false;
+				
+				if(new_page->frame != NULL)
+					memcpy(new_page->frame->kva, original_page->frame->kva, PAGE_SIZE);
+				
         }
         return true;
 }
@@ -186,6 +171,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	hash_clear(&spt->hash_table, spt_page_destroyer);
+	
+	// hash_destroy(&spt->hash_table, spt_page_destroyer);
 }
 
 
@@ -202,14 +189,10 @@ bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *au
 }
 static void
 spt_page_destroyer (struct hash_elem *e, void *aux UNUSED) {
-    struct page *page = hash_entry(e, struct page, hash_elem);
+    struct page *free_page = hash_entry(e, struct page, hash_elem);
 
-	// 프레임 테이블도 정리해야함
-
-    // // 수정된 내용을 저장장치에 기록
-    // if (page->dirty)
-    //     write_back_to_storage(page);
-    free(page);
+	free(free_page->frame);
+	free(free_page);
 }
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -273,17 +256,21 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-
-	 // 페이지 폴트 검증
-	// printf("\n\nfault handle_ addr : %p\n", addr);
-
-    if (addr == NULL || is_kernel_vaddr(addr))
-        exit(-1);
+	// 주소 범위 검사
+    if (addr == NULL || is_kernel_vaddr(addr) || !is_user_vaddr(addr))
+        return false;
     
 	struct page *page = spt_find_page(spt, addr);
-	
 	if(page == NULL)
-		exit(-1);
+		return false;
+	// 읽기 쓰기 권한 확인 못쓰면 
+	if(write && !page->writable)
+    	return false;
+	
+	// 매핑을 했는데 유저에서 발생한 경우
+	if(user){
+		// exit(-1);
+	}
 	// printf("fault run do claim page\n\n");
 	return vm_do_claim_page (page);
 }
@@ -329,7 +316,6 @@ vm_do_claim_page (struct page *page) {
 	if(!pml4_set_page(cur->pml4, page->va, frame->kva, page->writable)) // 검증 필요 PTE 권한 설정
 		{
 			return false;}
-	
 	// printf("\nim do cla page page addr : %p\n", page->va);
 	
 

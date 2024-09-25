@@ -88,7 +88,7 @@ pid_t fork(const char *thread_name, struct intr_frame *f)
 int exec(const char *cmd_line)
 {
 	// 만약 cml_line이 이름과 인자를 주는 명령어라고 가정한 방식임
-	char *tempcopy = palloc_get_page(2);
+	char *tempcopy = palloc_get_page(PAL_ZERO);
 	strlcpy(tempcopy, cmd_line, PGSIZE);
 
 	if (thread_current()->exec_file != NULL)

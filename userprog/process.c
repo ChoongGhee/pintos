@@ -823,7 +823,7 @@ lazy_load_segment(struct page *page, void *aux)
     memset (kva + page_read_bytes, 0, page_zero_bytes);
 
 	// 혹시 모르니 파일의 첫위치로 해줌
-    // file_seek (file, 0);
+    file_seek (file, 0);
 
     /* 더이상 aux는 쓰이지 않는다. */
     free(aux);
@@ -894,7 +894,7 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
 
-	if (!vm_alloc_page_with_initializer(VM_ANON, stack_bottom, true, NULL, NULL))
+	if (!vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL))
 			return success;
 	
 	if (!vm_claim_page(stack_bottom))
