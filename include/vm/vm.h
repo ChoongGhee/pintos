@@ -2,6 +2,10 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+// 재원 추가 vm
+#include <hash.h>
+
+#define PAGE_SIZE (1<12)
 
 enum vm_type {
 	/* page not initialized */
@@ -47,6 +51,12 @@ struct page {
 
 	/* Your implementation */
 
+	bool is_mem;
+	bool writable;
+	bool is_swapped;
+	size_t data_size;
+	
+	struct hash_elem hash_elem;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -69,7 +79,9 @@ struct frame {
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and
  * call it whenever you needed. */
+
 struct page_operations {
+	//함수 포인터를 받고 그 함수의 반환값, 뒤에 괄호는 인자의 타입
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
 	void (*destroy) (struct page *);
@@ -85,7 +97,9 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash hash_table;
 };
+
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);

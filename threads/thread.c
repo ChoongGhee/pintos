@@ -525,11 +525,6 @@ int thread_get_load_avg(void)
 {
 	return FP_TO_INT_ZERO(loadavg * 100);
 }
-// int thread_get_load_avg(void)
-// {
-// 	int result = FP_TO_INT_NEAREST(FP_MUL_INT(loadavg, 100));
-// 	return result < 0 ? 0 : (result > 100 ? 100 : result);
-// }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
@@ -537,11 +532,6 @@ int thread_get_recent_cpu(void)
 	/* TODO: Your implementation goes here */
 	return FP_TO_INT_ZERO(thread_current()->recent_cpu * 100);
 }
-// int thread_get_recent_cpu(void)
-// {
-// 	int result = FP_TO_INT_NEAREST(FP_MUL_INT(thread_current()->recent_cpu, 100));
-// 	return result < 0 ? 0 : (result > 100 ? 100 : result);
-// }
 
 /* Idle thread.  Executes when no other thread is ready to run.
 

@@ -91,6 +91,7 @@ hash_destroy (struct hash *h, hash_action_func *destructor) {
 struct hash_elem *
 hash_insert (struct hash *h, struct hash_elem *new) {
 	struct list *bucket = find_bucket (h, new);
+	// 이 부분에서 요소가 있는지 확인, 있으면 중복되어서 NULL이 아닌 값이 있을 것
 	struct hash_elem *old = find_elem (h, bucket, new);
 
 	if (old == NULL)
@@ -202,7 +203,7 @@ hash_first (struct hash_iterator *i, struct hash *h) {
 struct hash_elem *
 hash_next (struct hash_iterator *i) {
 	ASSERT (i != NULL);
-
+	// 결국 list의 포인터로 리스트를 구성하기 때문에 bucket이 포인터 연산으로 넘어가면 다음 배열이 됨.
 	i->elem = list_elem_to_hash_elem (list_next (&i->elem->list_elem));
 	while (i->elem == list_elem_to_hash_elem (list_end (i->bucket))) {
 		if (++i->bucket >= i->hash->buckets + i->hash->bucket_cnt) {

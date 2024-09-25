@@ -28,25 +28,38 @@ vm_anon_init (void) {
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
+	
 	page->operations = &anon_ops;
-
+	// printf("im hello_anon_page_initializer kva : %p and page va : %p\n", kva, page->va);
 	struct anon_page *anon_page = &page->anon;
+
+	//재원 추가
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
+	// printf("\nim swap_in_anon\n");
+
 	struct anon_page *anon_page = &page->anon;
+	//재원 추가
+	return true;
+
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	//재원 추가
+	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	//재원 추가
+	return true;
 }

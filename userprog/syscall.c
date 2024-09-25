@@ -240,6 +240,10 @@ void close(int fd)
 		cur->file_count--;
 	}
 }
+// 재원 추가 vm
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
+
+}
 // 시스템 콜 인자 검증 함수
 bool validate_syscall_args(struct intr_frame *f)
 {
@@ -257,12 +261,12 @@ bool validate_syscall_args(struct intr_frame *f)
 			uint64_t user_addr = *(uint64_t *)args[i];
 
 			// 방법 1
-			// if (is_kernel_vaddr(user_addr) || user_addr == NULL || pml4_get_page(thread_current()->pml4, user_addr) == NULL)
-			// 방법 2 (편법 냅다 exit(-1) 핸들러에서)
-			if (is_kernel_vaddr(user_addr) || user_addr == NULL)
+			if (is_kernel_vaddr(user_addr) || user_addr == NULL || pml4_get_page(thread_current()->pml4, user_addr) == NULL)
 			{
 				return false; // Invalid address
 			}
+			// 방법 2 (편법 냅다 exit(-1) 핸들러에서)
+			// if (is_kernel_vaddr(user_addr) || user_addr == NULL)
 
 			// 방법 2 (실제 page_fault시켜서 작업하는 거)
 			// Validate the user address by attempting to read from it

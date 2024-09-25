@@ -5,6 +5,10 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+// 재원 추가 (프로젝트 끝날 땐 지워줘야함.)
+#define VM
+#define USERPROG
+
 #ifdef VM
 #include "vm/vm.h"
 #endif

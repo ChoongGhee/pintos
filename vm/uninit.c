@@ -10,6 +10,8 @@
 
 #include "vm/vm.h"
 #include "vm/uninit.h"
+// 재원 추가
+// #include "userprog/process.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -29,6 +31,8 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 		bool (*initializer)(struct page *, enum vm_type, void *)) {
 	ASSERT (page != NULL);
 
+	// printf("unit_new_addr : %p\n\n", va);
+
 	*page = (struct page) {
 		.operations = &uninit_ops,
 		.va = va,
@@ -46,9 +50,10 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 static bool
 uninit_initialize (struct page *page, void *kva) {
 	struct uninit_page *uninit = &page->uninit;
-
 	/* Fetch first, page_initialize may overwrite the values */
+	// printf("\nim swap_in_uninit kva : %p and page va : %p\n", kva, page->va);
 	vm_initializer *init = uninit->init;
+
 	void *aux = uninit->aux;
 
 	/* TODO: You may need to fix this function. */
