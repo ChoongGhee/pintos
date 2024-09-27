@@ -91,10 +91,13 @@ int exec(const char *cmd_line)
 	char *tempcopy = palloc_get_page(PAL_ZERO);
 	strlcpy(tempcopy, cmd_line, PGSIZE);
 
+	// printf("\ncopy %p\n", tempcopy);
+
 	if (thread_current()->exec_file != NULL)
 		file_close(thread_current()->exec_file);
 
-	return process_exec(tempcopy);
+	process_exec(tempcopy);
+	exit(-1);
 }
 int wait(pid_t pid)
 {
@@ -261,7 +264,7 @@ bool validate_syscall_args(struct intr_frame *f)
 			uint64_t user_addr = *(uint64_t *)args[i];
 
 			// 방법 1
-			if (is_kernel_vaddr(user_addr) || user_addr == NULL || pml4_get_page(thread_current()->pml4, user_addr) == NULL)
+			if (is_kernel_vaddr(user_addr) || user_addr == NULL)
 			{
 				return false; // Invalid address
 			}
@@ -301,10 +304,8 @@ void syscall_handler(struct intr_frame *f)
 		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC:
-		if (f->R.rax = exec(f->R.rdi) == -1)
-		{
-			exit(-1);
-		}
+		// printf("")
+		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT:
 		f->R.rax = wait(f->R.rdi);

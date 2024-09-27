@@ -22,6 +22,7 @@
 // 재원 추가
 #include "user/syscall.h"
 
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -88,9 +89,12 @@ tid_t process_fork(const char *name, struct intr_frame *if_)
 	/* Clone current thread to new thread.*/
 	struct thread *cur = thread_current();
 	cur->user_if = if_;
+	// cur->user_if = malloc(sizeof(struct intr_frame));
+	// memcpy(cur->user_if, if_, sizeof(struct intr_frame));
 
 	int temp = thread_create(name, PRI_DEFAULT, __do_fork, cur);
 
+	// printf("\ntid num : %d\n", temp);
 	enum intr_level old_level = intr_disable();
 	thread_block();
 	intr_set_level(old_level);
@@ -171,7 +175,9 @@ __do_fork(void *aux)
 	// 재원 추가 fork (안정성을 위해)
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.rip = parent_if->rip;
 
+	// printf("\n\nif data %d\n\n", *if_);
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
@@ -180,8 +186,11 @@ __do_fork(void *aux)
 	process_activate(current);
 #ifdef VM
 	supplemental_page_table_init(&current->spt);
-	if (!supplemental_page_table_copy(&current->spt, &parent->spt))
+	if (!supplemental_page_table_copy(&current->spt, &parent->spt)){
+		printf("나 자식임 죽음 ㅋㅋ");
+		
 		goto error;
+	}
 #else
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
 		goto error;
@@ -205,11 +214,14 @@ __do_fork(void *aux)
 	process_init();
 	// 재원 추가 fork() 자식은 rax값 반환이 tid가 아님.
 	if_.R.rax = 0;
-	thread_unblock(parent);
 
+	thread_unblock(parent);
+	
 	/* Finally, switch to the newly created process. */
 	if (succ)
-	{
+	{	
+		// printf("\n\nfork done pa_rsp : %d, child_rsp: %d\n", parent_if->rsp,if_.rsp);
+		// printf("\nfork  done pa_rip: %d, child_rip : %d", parent_if->rip, if_.rip);
 		parent->isfork = true;
 		do_iret(&if_);
 	}
@@ -353,6 +365,9 @@ void process_exit(void)
 		}
 	}
 
+#endif
+#ifdef VM
+	hash_destroy(&cur->spt, spt_page_destroyer);
 #endif
 }
 
@@ -784,12 +799,12 @@ install_page(void *upage, void *kpage, bool writable)
 
 
 // 재원 추가 lazy에 넘겨줄 aux 데이터 구조체
-struct load_aux{
-	struct file* file;
-	off_t offset;
-	size_t read_bytes;
-	size_t zero_bytes;
-};
+// struct load_aux{
+// 	struct file* file;
+// 	off_t offset;
+// 	size_t read_bytes;
+// 	size_t zero_bytes;
+// };
 
 static bool
 lazy_load_segment(struct page *page, void *aux)
@@ -821,12 +836,12 @@ lazy_load_segment(struct page *page, void *aux)
         return false;
         
     memset (kva + page_read_bytes, 0, page_zero_bytes);
-
 	// 혹시 모르니 파일의 첫위치로 해줌
     file_seek (file, 0);
 
     /* 더이상 aux는 쓰이지 않는다. */
     free(aux);
+
 	return true;
 
 }
@@ -894,7 +909,7 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
 
-	if (!vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_0, stack_bottom, true, NULL, NULL))
+	if (!vm_alloc_page(VM_ANON, stack_bottom, 1))
 			return success;
 	
 	if (!vm_claim_page(stack_bottom))
@@ -903,6 +918,7 @@ setup_stack(struct intr_frame *if_)
 	if_->rsp = USER_STACK;
 
 	success = true;
+
 	return success;
 }
 #endif /* VM */

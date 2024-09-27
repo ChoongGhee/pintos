@@ -10,6 +10,8 @@
 #include "vm/file.h"
 #include "threads/mmu.h"
 #include "userprog/syscall.h"
+#include "userprog/process.h"
+
 // 재원 추가 먼저 선언
 uint64_t page_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
@@ -48,19 +50,18 @@ page_get_type (struct page *page) {
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
-static void spt_page_destroyer (struct hash_elem *e, void *aux UNUSED);
+void spt_page_destroyer (struct hash_elem *e, void *aux UNUSED);
 
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 bool
-vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
+vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux) {
 	
-
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	// printf("\nalloc addr: %p\n", upage);
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
@@ -71,10 +72,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
         struct page *new_page = malloc(sizeof(struct page));
         if (new_page == NULL) {
+
             goto err; 
         }
-        // memset(new_page, 0, sizeof(struct page));
-		// printf("\n\npage_alloc_ addr : %p\n", upage);
+
+        memset(new_page, 0, sizeof(struct page));
+		// printf("\n\npage_alloc_ addr22 : %p\n", upage);
 
         uninit_new(new_page, pg_round_down(upage), init, type, aux ,type == VM_FILE ? file_backed_initializer : anon_initializer);
 
@@ -84,15 +87,21 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			// 재원 추가 일단 프레임 테이블이 없어 냅다 free 잘못되면
 			// palloc_free_page(new_page->frame->kva);
 			// free(new_page->frame);
+			printf("\n\n%pdsad\n", upage);
+
             free(new_page);
             goto err;
         }
+		// printf("\n\npage_alloc_ addr2233: %p\n", upage);
 		
         return true;
     }
+	// printf("\n\npage_alloc_ addr2233: %p\n", upage);
+
 
 err:
-	return false;
+	{printf("안녕 나 뒤졌어 ㅋㅋ");
+	return false;}
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
@@ -153,17 +162,41 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
                 struct page *original_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
                 // 새로운 페이지 구조체 할당
-                if (!vm_alloc_page_with_initializer(original_page->operations->type == VM_ANON ? VM_ANON : VM_FILE, original_page->va, original_page->writable, NULL, NULL))
-					return false;
+				if(VM_TYPE(original_page->operations->type) == VM_UNINIT){
+					// printf("im_uninit!!\n");
+
+					struct load_aux * new_aux = malloc(sizeof(struct load_aux));
+					if(new_aux == NULL){
+						// printf("fuck\n");
+						return false;
+					}
+					memcpy(new_aux, original_page->uninit.aux, sizeof(struct load_aux));
+
+					// 이거 아닌 것 같은데 file 많이 많듦
+					new_aux->file = file_duplicate(new_aux->file);
+					
+					vm_alloc_page_with_initializer(original_page->uninit.type, original_page->va, original_page->writable, original_page->uninit.init, new_aux);
+						
+				}
+
+				else{
+					// printf("im_onon!!\n");
+                if (!vm_alloc_page_with_initializer(page_get_type(original_page), original_page->va, original_page->writable, NULL, NULL))
+					{	
+						// printf("hellodasdasdsa");
+						return false;}
 				
 				struct page* new_page = spt_find_page(dst, original_page->va);
-				if(!vm_do_claim_page(new_page))
-					return false;
+				if(!vm_do_claim_page(new_page)){
+					//  printf("\n\ndo claim_copy Failed!!\n\n");
+					return false;}
 				
-				if(new_page->frame != NULL)
-					memcpy(new_page->frame->kva, original_page->frame->kva, PAGE_SIZE);
+				memcpy(new_page->frame->kva, original_page->frame->kva, PAGE_SIZE);}
+
+				// printf("hello");
 				
         }
+		// printf("\n\nfork done hello");
         return true;
 }
 
@@ -187,12 +220,13 @@ bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *au
     const struct page *b = hash_entry (b_, struct page, hash_elem);
     return a->va < b->va;
 }
-static void
+void
 spt_page_destroyer (struct hash_elem *e, void *aux UNUSED) {
     struct page *free_page = hash_entry(e, struct page, hash_elem);
 
-	free(free_page->frame);
+	// free(free_page->frame);
 	free(free_page);
+	// vm_dealloc_page(free_page);
 }
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -229,7 +263,7 @@ vm_get_frame (void) {
 	/* TODO: Fill this function. */
 	struct frame *frame = malloc(sizeof(struct frame));
 	// memset(frame, 0, sizeof(struct frame));
-	frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
+	frame->kva = palloc_get_page(PAL_USER|PAL_ZERO);
 	frame->page = NULL;
 
 
@@ -254,25 +288,33 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-
+	
+	
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	// 주소 범위 검사
-    if (addr == NULL || is_kernel_vaddr(addr) || !is_user_vaddr(addr))
-        return false;
-    
-	struct page *page = spt_find_page(spt, addr);
-	if(page == NULL)
+	// printf("\n\nfault addr: %p, and im %s \n", addr, thread_current()->name);
+
+    if (addr == NULL || is_kernel_vaddr(addr)){
+		
 		return false;
+	}
+        
+
+	struct page *page = spt_find_page(spt, addr);
+	if(page == NULL){
+		return false;
+	}
+		
 	// 읽기 쓰기 권한 확인 못쓰면 
 	if(write && !page->writable)
-    	return false;
-	
-	// 매핑을 했는데 유저에서 발생한 경우
-	if(user){
-		// exit(-1);
+    	{exit(-1);}
+
+	// if(not_present)
+	{
+
+		return vm_do_claim_page(page);
 	}
-	// printf("fault run do claim page\n\n");
-	return vm_do_claim_page (page);
+	
 }
 
 /* Free the page.

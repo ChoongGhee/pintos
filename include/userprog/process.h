@@ -11,6 +11,12 @@ void process_exit(void);
 void process_activate(struct thread *next);
 
 //재원 추가가
+struct load_aux{
+	struct file* file;
+	off_t offset;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
 // static bool
 // lazy_load_segment(struct page *page, void *aux);
 #endif /* userprog/process.h */

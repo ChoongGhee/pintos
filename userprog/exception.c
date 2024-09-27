@@ -151,16 +151,13 @@ page_fault(struct intr_frame *f)
 	// 유저면 1 아니면 0
 	user = (f->error_code & PF_U) != 0;
 
-	
-
-
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
 		return;
 #endif
 	// 재원 추가 만능 소스
-	// exit(-1);
+	exit(-1);
 
 	/* Count page faults. */
 	page_fault_cnt++;
