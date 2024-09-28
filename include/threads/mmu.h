@@ -20,6 +20,9 @@ void pml4_set_dirty (uint64_t *pml4, const void *upage, bool dirty);
 bool pml4_is_accessed (uint64_t *pml4, const void *upage);
 void pml4_set_accessed (uint64_t *pml4, const void *upage, bool accessed);
 
+// 재원 추가
+// bool pml4_set_page_permission (uint64_t *pml4, void *upage, bool rw);
+
 #define is_writable(pte) (*(pte) & PTE_W)
 #define is_user_pte(pte) (*(pte) & PTE_U)
 #define is_kern_pte(pte) (!is_user_pte (pte))

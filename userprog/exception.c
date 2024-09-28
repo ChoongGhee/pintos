@@ -146,7 +146,7 @@ page_fault(struct intr_frame *f)
 	/* Determine cause. */
 	// 1 이면 페이지가 존재하지 않음, 0이면 존재
 	not_present = (f->error_code & PF_P) == 0;
-	// 1이면 쓰기 접근, 0이면 읽기 접근
+	// 1이면 쓰기 접근, 0이면 읽기 접근 현재 작업이 쓰기인지 읽기 인지 알려주는 변수
 	write = (f->error_code & PF_W) != 0;
 	// 유저면 1 아니면 0
 	user = (f->error_code & PF_U) != 0;

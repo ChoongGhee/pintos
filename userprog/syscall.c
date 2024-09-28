@@ -19,6 +19,9 @@
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
+//재원 추가
+static bool is_code_segment (void *addr);
+
 struct lock filesys_lock;
 
 /* System call.
@@ -164,8 +167,9 @@ int filesize(int fd)
 	return file_length(cur->file_list[fd]);
 }
 int read(int fd, void *buffer, unsigned size)
-{
-	struct thread *cur = thread_current();
+{	
+	
+	struct thread *cur = thread_current();	
 
 	if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 	{
@@ -177,7 +181,6 @@ int read(int fd, void *buffer, unsigned size)
 }
 int write(int fd, const void *buffer, unsigned size)
 {
-
 	// lock_acquire(&filesys_lock);
 	// printf("\ncur name %s, fd_num %d this start\n", thread_current()->name, fd);
 
@@ -244,9 +247,18 @@ void close(int fd)
 	}
 }
 // 재원 추가 vm
+static bool
+is_code_segment (void *addr)
+{
+  struct thread *t = thread_current ();
+  return (addr >= t->code_start && addr < t->code_end);
+}
+
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
 
 }
+
+
 // 시스템 콜 인자 검증 함수
 bool validate_syscall_args(struct intr_frame *f)
 {
@@ -286,11 +298,17 @@ bool validate_syscall_args(struct intr_frame *f)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f)
 {
-	thread_current()->isuser = true;
+	struct thread * cur = thread_current();
+	cur->isuser = true;
+
 	if (!validate_syscall_args(f))
 	{
 		exit(-1);
 	}
+	//시스템 콜 시 rsp저장
+	#ifdef VM
+	cur->syscall_rsp = f->rsp;
+	#endif
 
 	switch (f->R.rax)
 	{
@@ -304,7 +322,6 @@ void syscall_handler(struct intr_frame *f)
 		f->R.rax = fork(f->R.rdi, f);
 		break;
 	case SYS_EXEC:
-		// printf("")
 		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT:
@@ -323,9 +340,15 @@ void syscall_handler(struct intr_frame *f)
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
+		if(is_code_segment(f->R.rsi))
+			exit(-1);
+		
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
+		if(is_code_segment(f->R.rsi))
+			exit(-1);
+			
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:

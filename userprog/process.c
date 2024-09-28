@@ -569,6 +569,13 @@ load(const char *file_name, struct intr_frame *if_)
 				if (!load_segment(file, file_page, (void *)mem_page,
 								  read_bytes, zero_bytes, writable))
 					goto done;
+				
+				// 재원 추가 code 2
+				if ((phdr.p_flags & PF_X) != 0) // 실행 가능한지 아닌지 확인하는 코드
+                {
+                  t->code_start = mem_page;
+                  t->code_end = (mem_page + read_bytes + zero_bytes);
+                }
 			}
 			else
 				goto done;
@@ -839,6 +846,9 @@ lazy_load_segment(struct page *page, void *aux)
 	// 혹시 모르니 파일의 첫위치로 해줌
     file_seek (file, 0);
 
+	// 세그먼트 로드 후 권한 설정
+	// pml4_set_page_permission(thread_current()->pml4, page->va, false);
+
     /* 더이상 aux는 쓰이지 않는다. */
     free(aux);
 
@@ -893,6 +903,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		// ofs 페이지 만큼 해줘야함. 왜냐면 해당 위치를 찾게 하기 위해.
 		ofs += page_read_bytes;
 	}
 	return true;
@@ -909,13 +920,15 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
 
-	if (!vm_alloc_page(VM_ANON, stack_bottom, 1))
+	if (!vm_alloc_page(VM_ANON|VM_MARKER_0, stack_bottom, 1))
 			return success;
 	
 	if (!vm_claim_page(stack_bottom))
         return success;
 
 	if_->rsp = USER_STACK;
+
+	thread_current()->alloc_stack_adrr = stack_bottom;
 
 	success = true;
 

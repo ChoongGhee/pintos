@@ -313,3 +313,27 @@ pml4_set_accessed (uint64_t *pml4, const void *vpage, bool accessed) {
 			invlpg ((uint64_t) vpage);
 	}
 }
+
+
+// 재원 추가
+// bool
+// pml4_set_page_permission (uint64_t *pml4, void *upage, bool rw) {
+//     ASSERT (pg_ofs (upage) == 0);
+//     ASSERT (is_user_vaddr (upage));
+//     ASSERT (pml4 != base_pml4);
+
+//     uint64_t *pte = pml4e_walk (pml4, (uint64_t) upage, 0);
+
+//     if (pte && (*pte & PTE_P)) {
+//         if (rw)
+//             *pte |= PTE_W;
+//         else
+//             *pte &= ~PTE_W;
+
+//         if (rcr3 () == vtop (pml4))
+//             invlpg ((uint64_t) upage);
+
+//         return true;
+//     }
+//     return false;
+// }

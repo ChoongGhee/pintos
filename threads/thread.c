@@ -616,7 +616,9 @@ init_thread(struct thread *t, const char *name, int priority)
 	list_init(&t->child_list);
 	t->exit_value = 0;
 #endif
-
+#ifdef VM
+	t->alloc_stack_adrr = USER_STACK;
+#endif
 	// 재원 추가 mlfqs
 	if (thread_mlfqs)
 	{

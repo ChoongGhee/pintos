@@ -12,6 +12,7 @@
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 
+#define MAX_STACK_SIZE (1<<20)
 // 재원 추가 먼저 선언
 uint64_t page_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
@@ -79,7 +80,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
         memset(new_page, 0, sizeof(struct page));
 		// printf("\n\npage_alloc_ addr22 : %p\n", upage);
 
-        uninit_new(new_page, pg_round_down(upage), init, type, aux ,type == VM_FILE ? file_backed_initializer : anon_initializer);
+        uninit_new(new_page, pg_round_down(upage), init, type, aux ,VM_TYPE(type) == VM_FILE ? file_backed_initializer : anon_initializer);
 
 		new_page->writable = writable;
 
@@ -275,8 +276,32 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
+// static void 원래 보이드 였는데 bool이 나을듯
+static bool
+vm_stack_growth (void *addr UNUSED, uintptr_t rsp UNUSED) {
+	
+	if (addr < rsp - 8 || addr > rsp + 32)
+    	return false;
+
+	struct thread* cur = thread_current();
+
+	uintptr_t pgd_va = pg_round_down(addr);
+	uintptr_t cur_alloc_stack = cur->alloc_stack_adrr - PAGE_SIZE;
+
+	// printf("\ncur_alloc : %p, fault addr : %p, user %d\n", cur_alloc_stack, pgd_va, 3);
+
+	for (; cur_alloc_stack >= pgd_va; cur_alloc_stack -= PAGE_SIZE){
+		if(!vm_alloc_page(VM_ANON|VM_MARKER_0, cur_alloc_stack, 1))
+			return false;
+		if(!vm_claim_page(cur_alloc_stack))
+			return false;
+
+	}
+
+	cur->alloc_stack_adrr = cur_alloc_stack;
+
+	return true;
+	
 }
 
 /* Handle the fault on write_protected page */
@@ -289,29 +314,48 @@ bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	
-	
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+	struct thread* cur = thread_current();
+	struct supplemental_page_table *spt UNUSED = &cur->spt;
 	// 주소 범위 검사
 	// printf("\n\nfault addr: %p, and im %s \n", addr, thread_current()->name);
 
     if (addr == NULL || is_kernel_vaddr(addr)){
+		// printf("\nim fault in addr null\n");
 		
 		return false;
 	}
         
-
+	
 	struct page *page = spt_find_page(spt, addr);
+
+	// printf("\nwrite: %d, and im %d, is_user %d \n", write, page->writable, user);
+
 	if(page == NULL){
-		return false;
+
+		if((USER_STACK - MAX_STACK_SIZE <= addr) && (addr <= USER_STACK)){
+			
+			uintptr_t cur_rsp = user ? f->rsp : cur->syscall_rsp;
+
+			// printf("\ncur_rsp : %p, fault addr : %p, user %d\n", cur_rsp, addr, user);
+			return vm_stack_growth(addr, cur_rsp);
+			
+		}
+		else{
+			// printf("\nim fault in page null\n");
+			return false;}
+
 	}
-		
-	// 읽기 쓰기 권한 확인 못쓰면 
+	
+	// 읽기 쓰기 권한 확인 못쓰면
 	if(write && !page->writable)
-    	{exit(-1);}
+		{	
+			// printf("\n\nJSJD\n\n");
+			return false;}
 
-	// if(not_present)
-	{
 
+	if(not_present)
+	{	
+		// printf("\nfault %p\n", addr);
 		return vm_do_claim_page(page);
 	}
 	

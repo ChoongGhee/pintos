@@ -6,7 +6,8 @@
 
 void
 test_main (void)
-{
+{ 
+  // msg("test_main %p", test_main);
   *(int *) test_main = 0;
   fail ("writing the code segment succeeded");
 }
