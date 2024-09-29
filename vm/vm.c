@@ -174,7 +174,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 					memcpy(new_aux, original_page->uninit.aux, sizeof(struct load_aux));
 
 					// 이거 아닌 것 같은데 file 많이 많듦
-					new_aux->file = file_duplicate(new_aux->file);
+					// new_aux->file = file_duplicate(new_aux->file);
 					
 					vm_alloc_page_with_initializer(original_page->uninit.type, original_page->va, original_page->writable, original_page->uninit.init, new_aux);
 						

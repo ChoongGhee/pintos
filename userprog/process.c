@@ -813,7 +813,8 @@ install_page(void *upage, void *kpage, bool writable)
 // 	size_t zero_bytes;
 // };
 
-static bool
+// static bool
+bool
 lazy_load_segment(struct page *page, void *aux)
 {	
 	struct load_aux* aux_info = (struct load_aux*) aux;
@@ -830,8 +831,8 @@ lazy_load_segment(struct page *page, void *aux)
     
     file_seek (file, ofs);
     
-    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    // size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    // size_t page_zero_bytes = PGSIZE - page_read_bytes;
     
     /* 실제로 파일을 읽어와서 페이지에 매핑된 물리 프레임에 로드한다. */
     uint8_t *kva = page->frame->kva;
@@ -839,15 +840,12 @@ lazy_load_segment(struct page *page, void *aux)
         return false;
         
     /* 읽기 실패 */
-    if (file_read (file, kva, page_read_bytes) != (int) page_read_bytes)
+    if (file_read (file, kva, read_bytes) != (int) read_bytes)
         return false;
         
-    memset (kva + page_read_bytes, 0, page_zero_bytes);
+    memset (kva + read_bytes, 0, zero_bytes);
 	// 혹시 모르니 파일의 첫위치로 해줌
-    file_seek (file, 0);
-
-	// 세그먼트 로드 후 권한 설정
-	// pml4_set_page_permission(thread_current()->pml4, page->va, false);
+    // file_seek (file, 0); // 아닌듯
 
     /* 더이상 aux는 쓰이지 않는다. */
     free(aux);

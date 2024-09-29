@@ -1,6 +1,10 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "vm/vm.h"
+// 재원 추가
+#include "filesys/file.h"
+#include "userprog/process.h"
+#include "threads/vaddr.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -50,6 +54,49 @@ file_backed_destroy (struct page *page) {
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	
+	struct thread* cur = thread_current();
+	
+	//파일 길이 확인 해야하나?
+
+    size_t read_bytes = length;
+    size_t zero_bytes = PGSIZE - (read_bytes % PGSIZE);
+    if (zero_bytes == PGSIZE)
+        zero_bytes = 0;
+
+    void *va = addr;
+
+    while (read_bytes > 0 || zero_bytes > 0) 
+    {
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+        // aux 구조체 설정
+        struct load_aux *aux = malloc(sizeof(struct load_aux));
+        if (aux == NULL)
+            return -1;
+
+        aux->file = file_reopen(file);  // 새로운 파일 디스크립터 생성 > 매핑(page)마다 file참조가 되어야함.
+        aux->offset = offset;
+        aux->read_bytes = page_read_bytes;
+        aux->zero_bytes = page_zero_bytes;
+
+        // 페이지 할당
+        if (!vm_alloc_page_with_initializer(VM_FILE, va,
+                                            writable, lazy_load_segment, aux))
+        {
+            free(aux);
+            return NULL;
+        }
+
+        // 다음 페이지로 이동
+        read_bytes -= page_read_bytes;
+        zero_bytes -= page_zero_bytes;
+        va += PGSIZE;
+        offset += page_read_bytes;
+    }
+	
+	return addr;
 }
 
 /* Do the munmap */

@@ -22,8 +22,6 @@ void syscall_handler(struct intr_frame *);
 //재원 추가
 static bool is_code_segment (void *addr);
 
-struct lock filesys_lock;
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -57,7 +55,10 @@ static const struct syscall_info syscall_table[] = {
 	[SYS_WRITE] = {3, {false, true, false}},
 	[SYS_SEEK] = {2, {false, false}},
 	[SYS_TELL] = {1, {false}},
-	[SYS_CLOSE] = {1, {false}}};
+	[SYS_CLOSE] = {1, {false}},
+	[SYS_MMAP] = {5, {false, false, false, false, false}}, //굳이 검사 안돌려두 댐
+	[SYS_MUNMAP] = {1, {false}}
+	};
 
 void syscall_init(void)
 {
@@ -71,7 +72,7 @@ void syscall_init(void)
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	lock_init(&filesys_lock);
+	// lock_init(&filesys_lock);
 }
 // 재원 추가
 void halt(void)
@@ -253,11 +254,17 @@ is_code_segment (void *addr)
   struct thread *t = thread_current ();
   return (addr >= t->code_start && addr < t->code_end);
 }
-
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
+	
+	struct thread * cur = thread_current();
+	if(addr == 0 || fd <3 || pg_ofs(addr) != 0|| spt_find_page(&cur->spt, addr) != NULL|| cur->file_list[fd] == NULL||length == 0)
+		return NULL;
+
+	return do_mmap(addr, length, writable, cur->file_list[fd], offset);
+}
+void munmap (void *addr){
 
 }
-
 
 // 시스템 콜 인자 검증 함수
 bool validate_syscall_args(struct intr_frame *f)
@@ -359,6 +366,12 @@ void syscall_handler(struct intr_frame *f)
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
+		break;
+	case SYS_MMAP:{
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;}
+	case SYS_MUNMAP:
+
 		break;
 	default:
 		printf("Unexpected system call!\n");
