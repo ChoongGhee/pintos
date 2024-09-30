@@ -571,11 +571,11 @@ load(const char *file_name, struct intr_frame *if_)
 					goto done;
 				
 				// 재원 추가 code 2
-				if ((phdr.p_flags & PF_X) != 0) // 실행 가능한지 아닌지 확인하는 코드
-                {
-                  t->code_start = mem_page;
-                  t->code_end = (mem_page + read_bytes + zero_bytes);
-                }
+				// if ((phdr.p_flags & PF_X) != 0) // 실행 가능한지 아닌지 확인하는 코드
+                // {
+                //   t->code_start = mem_page;
+                //   t->code_end = (mem_page + read_bytes + zero_bytes);
+                // }
 			}
 			else
 				goto done;
@@ -828,24 +828,26 @@ lazy_load_segment(struct page *page, void *aux)
     off_t ofs = aux_info->offset;
     uint32_t read_bytes = aux_info->read_bytes;
     uint32_t zero_bytes = aux_info->zero_bytes;
-    
+
+
     file_seek (file, ofs);
-    
+	// printf("\n\nfile position %d, lenth : %d\n\n", file_tell(file), file_length(file));
     // size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     // size_t page_zero_bytes = PGSIZE - page_read_bytes;
-    
+	
+	
     /* 실제로 파일을 읽어와서 페이지에 매핑된 물리 프레임에 로드한다. */
     uint8_t *kva = page->frame->kva;
-    if (kva == NULL)
-        return false;
-        
+    if (kva == NULL){
+        return false;}
+    
     /* 읽기 실패 */
-    if (file_read (file, kva, read_bytes) != (int) read_bytes)
-        return false;
-        
+    if (file_read (file, kva, read_bytes)!= (int) read_bytes){
+
+        return false;}
+
+
     memset (kva + read_bytes, 0, zero_bytes);
-	// 혹시 모르니 파일의 첫위치로 해줌
-    // file_seek (file, 0); // 아닌듯
 
     /* 더이상 aux는 쓰이지 않는다. */
     free(aux);

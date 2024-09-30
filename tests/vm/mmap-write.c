@@ -24,6 +24,7 @@ test_main (void)
   memcpy (ACTUAL, sample, strlen (sample));
   munmap (map);
 
+
   /* Read back via read(). */
   read (handle, buf, strlen (sample));
   CHECK (!memcmp (buf, sample, strlen (sample)),

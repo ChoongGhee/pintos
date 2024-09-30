@@ -20,7 +20,7 @@ void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
 //재원 추가
-static bool is_code_segment (void *addr);
+static bool is_code_segment (void *addr, struct intr_frame *f);
 
 /* System call.
  *
@@ -249,10 +249,18 @@ void close(int fd)
 }
 // 재원 추가 vm
 static bool
-is_code_segment (void *addr)
+is_code_segment (void *addr, struct intr_frame *f)
 {
-  struct thread *t = thread_current ();
-  return (addr >= t->code_start && addr < t->code_end);
+//   struct thread *t = thread_current ();
+//   return (addr >= t->code_start && addr < t->code_end);
+
+  struct thread * cur = thread_current();
+		if(pml4_get_page(cur->pml4, f->R.rsi)){
+			struct page *temp = spt_find_page(&cur->spt, f->R.rsi);
+			if(temp->writable == 0)
+				return false;
+		}
+	return true;
 }
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
 	
@@ -263,7 +271,11 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
 	return do_mmap(addr, length, writable, cur->file_list[fd], offset);
 }
 void munmap (void *addr){
-
+	
+	if(addr == 0 || pg_ofs(addr) != 0|| spt_find_page(&thread_current()->spt, addr) == NULL)
+		exit(-1);
+	
+	do_munmap(addr);
 }
 
 // 시스템 콜 인자 검증 함수
@@ -287,15 +299,6 @@ bool validate_syscall_args(struct intr_frame *f)
 			{
 				return false; // Invalid address
 			}
-			// 방법 2 (편법 냅다 exit(-1) 핸들러에서)
-			// if (is_kernel_vaddr(user_addr) || user_addr == NULL)
-
-			// 방법 2 (실제 page_fault시켜서 작업하는 거)
-			// Validate the user address by attempting to read from it
-			// if (get_user((const uint8_t *)user_addr) == -1)
-			// {
-			// 	return false; // Invalid address
-			// }
 		}
 	}
 
@@ -346,18 +349,17 @@ void syscall_handler(struct intr_frame *f)
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
 		break;
-	case SYS_READ:
-		if(is_code_segment(f->R.rsi))
+	case SYS_READ:{
+		if(!is_code_segment(f->R.rsi, f))
 			exit(-1);
-		
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
-		break;
-	case SYS_WRITE:
-		if(is_code_segment(f->R.rsi))
+		break;}
+	case SYS_WRITE:{
+		if(!is_code_segment(f->R.rsi, f))
 			exit(-1);
 			
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
-		break;
+		break;}
 	case SYS_SEEK:
 		seek(f->R.rdi, f->R.rsi);
 		break;
@@ -367,11 +369,11 @@ void syscall_handler(struct intr_frame *f)
 	case SYS_CLOSE:
 		close(f->R.rdi);
 		break;
-	case SYS_MMAP:{
+	case SYS_MMAP:
 		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
-		break;}
+		break;
 	case SYS_MUNMAP:
-
+		munmap(f->R.rdi);
 		break;
 	default:
 		printf("Unexpected system call!\n");

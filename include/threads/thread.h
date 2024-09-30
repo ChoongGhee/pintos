@@ -158,8 +158,8 @@ struct thread
 	uintptr_t syscall_rsp;
 	uintptr_t alloc_stack_adrr;
 
-	uintptr_t code_start;
-	uintptr_t code_end;
+	// uintptr_t code_start;
+	// uintptr_t code_end;
 #endif
 
 	/* Owned by thread.c. */

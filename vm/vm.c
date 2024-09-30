@@ -263,7 +263,7 @@ vm_get_frame (void) {
 
 	/* TODO: Fill this function. */
 	struct frame *frame = malloc(sizeof(struct frame));
-	// memset(frame, 0, sizeof(struct frame));
+	memset(frame, 0, sizeof(struct frame));
 	frame->kva = palloc_get_page(PAL_USER|PAL_ZERO);
 	frame->page = NULL;
 
@@ -328,9 +328,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	
 	struct page *page = spt_find_page(spt, addr);
 
-	// printf("\nwrite: %d, and im %d, is_user %d \n", write, page->writable, user);
+	// printf("\nwrite: %d, and im %d, is_user %d, not_present %d \n", write, page->writable, user, not_present);
 
 	if(page == NULL){
+	// printf("\nwrite: %d, and im %d, is_user %d \n", write, page->writable, user);
 
 		if((USER_STACK - MAX_STACK_SIZE <= addr) && (addr <= USER_STACK)){
 			
@@ -355,8 +356,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	if(not_present)
 	{	
-		// printf("\nfault %p\n", addr);
-		return vm_do_claim_page(page);
+		int a = vm_do_claim_page(page);
+		// printf("\nfault %p\n %p     %d\n\n", addr, page, a);
+
+		return a;
 	}
 	
 }
@@ -402,7 +405,6 @@ vm_do_claim_page (struct page *page) {
 	if(!pml4_set_page(cur->pml4, page->va, frame->kva, page->writable)) // 검증 필요 PTE 권한 설정
 		{
 			return false;}
-	// printf("\nim do cla page page addr : %p\n", page->va);
 	
 
 	return swap_in (page, frame->kva);

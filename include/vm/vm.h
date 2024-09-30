@@ -39,6 +39,17 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
+
+struct file_info {
+	void * start_va;
+	int page_cnt;
+	struct file* open_file;
+	size_t file_size;
+
+	size_t read_bytes;
+	size_t zero_bytes;
+	size_t ofs;
+};
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -50,10 +61,9 @@ struct page {
 
 	/* Your implementation */
 
-	bool is_mem;
 	bool writable;
 	bool is_swapped;
-	size_t data_size;
+	struct file_info* file_info;
 	
 	struct hash_elem hash_elem;
 	/* Per-type data are binded into the union.
