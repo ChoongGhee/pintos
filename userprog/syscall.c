@@ -21,6 +21,7 @@ void syscall_handler(struct intr_frame *);
 
 //재원 추가
 static bool is_code_segment (void *addr, struct intr_frame *f);
+struct lock filesys_lock;
 
 /* System call.
  *
@@ -72,7 +73,7 @@ void syscall_init(void)
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	// lock_init(&filesys_lock);
+	lock_init(&filesys_lock);
 }
 // 재원 추가
 void halt(void)
@@ -108,8 +109,11 @@ int wait(pid_t pid)
 	return process_wait(pid);
 }
 bool create(const char *file, unsigned initial_size)
-{
-	return filesys_create(file, initial_size);
+{	
+	lock_acquire(&filesys_lock);
+	bool suc = filesys_create(file, initial_size);
+	lock_release(&filesys_lock);
+	return suc;
 }
 bool remove(const char *file)
 {
@@ -123,8 +127,9 @@ int open(const char *file)
 	{
 		return -1;
 	}
-
+	lock_acquire(&filesys_lock);
 	struct file *temp = filesys_open(file);
+	lock_release(&filesys_lock);
 	if (temp == NULL)
 	{
 		return -1;
@@ -265,7 +270,7 @@ is_code_segment (void *addr, struct intr_frame *f)
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset){
 	
 	struct thread * cur = thread_current();
-	if(addr == 0 || fd <3 || pg_ofs(addr) != 0|| spt_find_page(&cur->spt, addr) != NULL|| cur->file_list[fd] == NULL||length == 0)
+	if(addr == 0 || fd <3 || pg_ofs(addr) != 0|| spt_find_page(&cur->spt, addr) != NULL|| cur->file_list[fd] == NULL||length == 0|| offset % PGSIZE != 0||is_kernel_vaddr(addr)||is_kernel_vaddr(addr+length)|| (long)length<0)
 		return NULL;
 
 	return do_mmap(addr, length, writable, cur->file_list[fd], offset);
@@ -355,9 +360,6 @@ void syscall_handler(struct intr_frame *f)
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;}
 	case SYS_WRITE:{
-		if(!is_code_segment(f->R.rsi, f))
-			exit(-1);
-			
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;}
 	case SYS_SEEK:

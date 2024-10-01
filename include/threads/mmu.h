@@ -22,6 +22,7 @@ void pml4_set_accessed (uint64_t *pml4, const void *upage, bool accessed);
 
 // 재원 추가
 // bool pml4_set_page_permission (uint64_t *pml4, void *upage, bool rw);
+// bool pml4_clear_unused_page (uint64_t *pml4, void *upage);
 
 #define is_writable(pte) (*(pte) & PTE_W)
 #define is_user_pte(pte) (*(pte) & PTE_U)

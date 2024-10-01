@@ -62,7 +62,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-	// printf("\nalloc addr: %p\n", upage);
+	// printf("\nalloc addr: %p thread_name : %s\n", upage, thread_current()->name);
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
@@ -74,6 +74,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
         struct page *new_page = malloc(sizeof(struct page));
         if (new_page == NULL) {
 
+			printf("\n\npage_alloc_ addr2233: %p\n", upage);
             goto err; 
         }
 
@@ -89,15 +90,14 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, v
 			// palloc_free_page(new_page->frame->kva);
 			// free(new_page->frame);
 			printf("\n\n%pdsad\n", upage);
+			printf("\n\npage_alloc_ addr2233: %p\n", upage);
 
             free(new_page);
             goto err;
         }
-		// printf("\n\npage_alloc_ addr2233: %p\n", upage);
 		
         return true;
     }
-	// printf("\n\npage_alloc_ addr2233: %p\n", upage);
 
 
 err:
@@ -159,7 +159,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
         // src 해시 테이블 순회
         struct hash_iterator i;
         hash_first(&i, &src->hash_table);
-        while (hash_next(&i)) {  // hash_next는 모든 요소를 돌면 bukets->buket의 요소 모두 돌면 (이유는 malloc으로 bukets를 list 포인터 배열로 만들었기 때문)
+        
+
+		while(hash_next(&i))
+		{  
+			// hash_next는 모든 요소를 돌면 bukets->buket의 요소 모두 돌면 (이유는 malloc으로 bukets를 list 포인터 배열로 만들었기 때문)
                 struct page *original_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
                 // 새로운 페이지 구조체 할당
@@ -176,7 +180,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 					// 이거 아닌 것 같은데 file 많이 많듦
 					// new_aux->file = file_duplicate(new_aux->file);
 					
-					vm_alloc_page_with_initializer(original_page->uninit.type, original_page->va, original_page->writable, original_page->uninit.init, new_aux);
+					vm_alloc_page_with_initializer(page_get_type(original_page), original_page->va, original_page->writable, original_page->uninit.init, new_aux);
 						
 				}
 
@@ -194,8 +198,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 				
 				memcpy(new_page->frame->kva, original_page->frame->kva, PAGE_SIZE);}
 
-				// printf("hello");
-				
         }
 		// printf("\n\nfork done hello");
         return true;
@@ -225,9 +227,22 @@ void
 spt_page_destroyer (struct hash_elem *e, void *aux UNUSED) {
     struct page *free_page = hash_entry(e, struct page, hash_elem);
 
-	// free(free_page->frame);
+	struct file_info *info = free_page->file_info;
+    struct thread* cur = thread_current();
+	
+    if(VM_TYPE(free_page->operations->type) == VM_FILE){
+        if(pml4_is_dirty(cur->pml4, free_page->va)){
+            file_write_at(info->open_file, free_page->frame->kva, info->read_bytes,info->ofs);
+        }
+    }
+
+    free(aux);
+    spt_remove_page(&cur->spt, free_page);
+	// pml4_clear_unused_page(&cur->spt, free_page);
+    // pml4_clear_page(cur->pml4, free_page->va);
+
+
 	free(free_page);
-	// vm_dealloc_page(free_page);
 }
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -337,7 +352,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			
 			uintptr_t cur_rsp = user ? f->rsp : cur->syscall_rsp;
 
-			// printf("\ncur_rsp : %p, fault addr : %p, user %d\n", cur_rsp, addr, user);
+			// printf("\n\ncur_rsp : %p, fault addr : %p, user %d\n\n", cur_rsp, addr, user);
 			return vm_stack_growth(addr, cur_rsp);
 			
 		}

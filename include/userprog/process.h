@@ -16,6 +16,9 @@ struct load_aux{
 	off_t offset;
 	size_t read_bytes;
 	size_t zero_bytes;
+
+	void * start_va;
+	int page_cnt;
 };
 bool lazy_load_segment(struct page *page, void *aux);
 #endif /* userprog/process.h */

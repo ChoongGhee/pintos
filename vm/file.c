@@ -28,9 +28,14 @@ vm_file_init (void) {
 bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
-	page->operations = &file_ops;
+	struct load_aux * temp = page->uninit.aux;
+    page->operations = &file_ops;
 
-	struct file_page *file_page = &page->file;
+    struct file_page *file_page = &page->file;
+
+    file_page->file_aux;
+
+    return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -49,6 +54,18 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+
+    // struct load_aux * aux = file_page->file_aux;
+    // struct thread* cur = thread_current();
+    // if(VM_TYPE(page->operations->type) == VM_FILE){
+    //     if(pml4_is_dirty(cur->pml4, page->va)){
+    //         file_write_at(aux->file, page->frame->kva, aux->read_bytes,aux->offset);
+    //     }
+    // }
+
+    // free(aux);
+    // spt_remove_page(&cur->spt, page);
+    // pml4_clear_page(cur->pml4, page->va);
 }
 bool
 lazy_load_file(struct page *page, void *aux)
@@ -73,9 +90,9 @@ lazy_load_file(struct page *page, void *aux)
 
     memset (kva + read_bytes, 0, zero_bytes);
 
-    pml4_set_dirty(thread_current()->pml4, page->va, true);
+    // pml4_set_dirty(thread_current()->pml4, page->va, true);
     /* 더이상 aux는 쓰이지 않는다. */
-    free(aux);
+    // free(aux);
     // printf("\nㅎㅇ? read %d, zero %d, ofs: %d\n\n", read_bytes, zero_bytes, ofs);
 
 	return true;
@@ -92,7 +109,8 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 
     // 실제 읽을 바이트 수 계산
     size_t read_bytes = file_size < length ? file_size : length;
-    size_t remaining_length = length;
+    
+    long remaining_length = length;
 
     void *va = addr;
     off_t file_offset = offset;
@@ -102,6 +120,8 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
         page_cnt++;
     
     int cnt = 0;
+
+
     while (remaining_length > 0) 
     {   
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
@@ -117,6 +137,8 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
         aux->read_bytes = page_read_bytes;
         aux->zero_bytes = page_zero_bytes;
         
+        aux->start_va = addr;
+        aux->page_cnt = page_cnt;
         // 페이지 할당
         if (!vm_alloc_page_with_initializer(VM_FILE, va,
                                             writable, lazy_load_file, aux))
@@ -149,12 +171,56 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
         remaining_length -= PGSIZE;
         va += PGSIZE;
 
-        cnt++;
-        // printf("\n\n%d\n\n", cnt);
+
     }
-        
+
+
     return addr;
 }
+
+/* Do the munmap */
+// void
+// do_munmap (void *addr) {
+
+//     struct thread * cur = thread_current();
+//     struct page* p = spt_find_page(&cur->spt, addr);
+
+//     struct load_aux * aux = VM_TYPE(p->operations->type) == VM_UNINIT? p->uninit.aux : p->file.file_aux;
+//     size_t length = aux->page_cnt*PGSIZE;
+//     void *va = aux->start_va;
+
+//     // printf("\n\n%d\n\n", length);
+
+//     while(length > 0){
+        
+//         struct page* temp = spt_find_page(&cur->spt, va);
+
+//         if(pml4_is_dirty(cur->pml4, va)){
+//             file_seek(temp->file_info->open_file, temp->file_info->ofs);
+//             file_write(temp->file_info->open_file, temp->frame->kva, temp->file_info->read_bytes);
+//         }
+
+//         // file_close(temp->file_info->open_file);
+
+//         // palloc_free_page(temp->frame->kva);
+
+//         // free(temp->frame);
+//         // free(temp->file_info);
+
+//         struct thread* cur = thread_current();
+//         spt_remove_page(&cur->spt, temp);
+//         // free(temp);
+
+//         // pml4_set_dirty(cur->pml4, va, 0);
+//         pml4_clear_page(cur->pml4, va);
+
+//         length -= PGSIZE;
+//         va += PGSIZE;
+
+//     // printf("\n\n%d\n\n", length);
+
+//     }
+// }
 
 /* Do the munmap */
 void
@@ -177,18 +243,19 @@ do_munmap (void *addr) {
             file_write(temp->file_info->open_file, temp->frame->kva, temp->file_info->read_bytes);
         }
 
-        file_close(temp->file_info->open_file);
+        // file_close(temp->file_info->open_file);
 
-        palloc_free_page(temp->frame->kva);
+        // palloc_free_page(temp->frame->kva);
 
-        free(temp->frame);
-        free(temp->file_info);
+        // free(temp->frame);
+        // free(temp->file_info);
 
         struct thread* cur = thread_current();
         spt_remove_page(&cur->spt, temp);
         // free(temp);
 
-        pml4_clear_page(cur->pml4, va);
+        pml4_set_dirty(cur->pml4, va, 0);
+        // pml4_clear_unused_page(&cur->spt, temp);
 
         length -= PGSIZE;
         va += PGSIZE;

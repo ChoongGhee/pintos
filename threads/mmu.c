@@ -337,3 +337,22 @@ pml4_set_accessed (uint64_t *pml4, const void *vpage, bool accessed) {
 //     }
 //     return false;
 // }
+
+// bool
+// pml4_clear_unused_page (uint64_t *pml4, void *upage) {
+//     uint64_t *pte;
+//     ASSERT (pg_ofs (upage) == 0);
+//     ASSERT (is_user_vaddr (upage));
+
+//     pte = pml4e_walk (pml4, (uint64_t) upage, false);
+
+//     if (pte != NULL && (*pte & PTE_P) != 0) {
+//         void *kpage = ptov(PTE_ADDR(*pte));
+//         palloc_free_page(kpage);
+//         *pte = 0;
+//         if (rcr3 () == vtop (pml4))
+//             invlpg ((uint64_t) upage);
+//         return true;
+//     }
+//     return false;
+// }

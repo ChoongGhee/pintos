@@ -7,6 +7,7 @@ struct page;
 enum vm_type;
 
 struct file_page {
+	struct load_aux* file_aux;
 };
 
 void vm_file_init (void);
