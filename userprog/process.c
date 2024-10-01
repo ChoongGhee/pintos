@@ -18,14 +18,15 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-
 // 재원 추가
 #include "user/syscall.h"
-
+#include "threads/synch.h"
 
 #ifdef VM
 #include "vm/vm.h"
 #endif
+struct lock filesys_lock;
+struct lock spt_lock;
 
 static void process_cleanup(void);
 static bool load(const char *file_name, struct intr_frame *if_);
@@ -48,6 +49,10 @@ tid_t process_create_initd(const char *file_name)
 {
 	char *fn_copy;
 	tid_t tid;
+
+	// merge 삼총사
+	lock_init(&filesys_lock);
+	lock_init(&spt_lock);
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -499,7 +504,9 @@ load(const char *file_name, struct intr_frame *if_)
 	process_activate(thread_current());
 
 	/* Open executable file. */
+	// lock_acquire(&filesys_lock);
 	file = filesys_open(file_name);
+	// lock_release(&filesys_lock);
 	// file = open(file_name);
 	if (file == NULL)
 	{

@@ -12,6 +12,8 @@
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 
+#include "threads/synch.h"
+
 #define MAX_STACK_SIZE (1<<20)
 // 재원 추가 먼저 선언
 uint64_t page_hash (const struct hash_elem *p_, void *aux UNUSED);
@@ -21,7 +23,9 @@ struct page *supplemental_page_table_find (struct supplemental_page_table *spt, 
 bool supplemental_page_table_delete (struct supplemental_page_table *spt, struct page *page);
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
-void
+
+extern struct lock spt_lock;
+
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
@@ -31,6 +35,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	lock_init(&spt_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -124,20 +129,29 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
+	// lock_acquire(&spt_lock);
 	bool succ = false;
 	/* TODO: Fill this function. */
 	// 재원 추가 vm
 	succ = hash_insert (&spt->hash_table, &page->hash_elem) == NULL;
+	// lock_release(&spt_lock);
 	return succ;
 }
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	//재원 추가 vm
+	// lock_acquire(&spt_lock);
 	bool succ = false;
 	succ = hash_delete (&spt->hash_table, &page->hash_elem) != NULL;
+	
+	
 	if(succ){
-	vm_dealloc_page (page);}
+		// palloc_free_page(page->frame->kva);
+		free(page->frame);
+		vm_dealloc_page (page);}
+	// lock_release(&spt_lock);
+	
 
 	return succ;
 	
@@ -186,12 +200,14 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
 				else{
 					// printf("im_onon!!\n");
-                if (!vm_alloc_page_with_initializer(page_get_type(original_page), original_page->va, original_page->writable, NULL, NULL))
-					{	
-						// printf("hellodasdasdsa");
-						return false;}
+               	vm_alloc_page(page_get_type(original_page), original_page->va, original_page->writable);
 				
 				struct page* new_page = spt_find_page(dst, original_page->va);
+				
+				if(VM_TYPE(original_page->operations->type) == VM_FILE){
+					new_page->file_info = original_page->file_info;
+				}
+				
 				if(!vm_do_claim_page(new_page)){
 					//  printf("\n\ndo claim_copy Failed!!\n\n");
 					return false;}
@@ -237,6 +253,7 @@ spt_page_destroyer (struct hash_elem *e, void *aux UNUSED) {
     }
 
     free(aux);
+	
     spt_remove_page(&cur->spt, free_page);
 	// pml4_clear_unused_page(&cur->spt, free_page);
     // pml4_clear_page(cur->pml4, free_page->va);

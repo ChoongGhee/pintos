@@ -21,7 +21,7 @@ void syscall_handler(struct intr_frame *);
 
 //재원 추가
 static bool is_code_segment (void *addr, struct intr_frame *f);
-struct lock filesys_lock;
+// struct lock filesys_lock;
 
 /* System call.
  *
@@ -35,6 +35,8 @@ struct lock filesys_lock;
 #define MSR_STAR 0xc0000081			/* Segment selector msr */
 #define MSR_LSTAR 0xc0000082		/* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+
+extern struct lock filesys_lock;
 
 struct syscall_info
 {
@@ -73,7 +75,7 @@ void syscall_init(void)
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	lock_init(&filesys_lock);
+	// lock_init(&filesys_lock);
 }
 // 재원 추가
 void halt(void)
@@ -110,14 +112,17 @@ int wait(pid_t pid)
 }
 bool create(const char *file, unsigned initial_size)
 {	
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	bool suc = filesys_create(file, initial_size);
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
+
 	return suc;
 }
 bool remove(const char *file)
-{
+{	
+	// lock_acquire(&filesys_lock);
 	return filesys_remove(file);
+	// lock_release(&filesys_lock);
 }
 int open(const char *file)
 {
@@ -127,9 +132,10 @@ int open(const char *file)
 	{
 		return -1;
 	}
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	struct file *temp = filesys_open(file);
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
+
 	if (temp == NULL)
 	{
 		return -1;
@@ -157,7 +163,7 @@ int open(const char *file)
 		return idx;
 	}
 	else
-	{
+	{	
 		file_close(temp);
 		return -1;
 	}
@@ -181,26 +187,27 @@ int read(int fd, void *buffer, unsigned size)
 	{
 		return -1;
 	}
+	// lock_acquire(&filesys_lock);
 	int val = file_read(cur->file_list[fd], buffer, size);
-
+	// lock_release(&filesys_lock);
 	return val;
 }
 int write(int fd, const void *buffer, unsigned size)
 {
-	// lock_acquire(&filesys_lock);
+
 	// printf("\ncur name %s, fd_num %d this start\n", thread_current()->name, fd);
 
 	if (fd == STDOUT_FILENO)
 	{
 		// printf("\ncur name %s, fd_num %d this is STDOUT_FILENO\n", thread_current()->name, fd);
 		putbuf((char *)buffer, size);
-		// lock_release(&filesys_lock);
+	
 		return size;
 	}
 	else if (fd == STDIN_FILENO)
 	{
 		// printf("\ncur name %s, fd_num %d this is STDINFILENO\n", thread_current()->name, fd);
-		// lock_release(&filesys_lock);
+	
 		return -1;
 	}
 	else
@@ -209,9 +216,9 @@ int write(int fd, const void *buffer, unsigned size)
 		if (fd < 2 || fd > LIST_MAX_SIZE || cur->file_list[fd] == NULL)
 		{
 			// printf("\ncur name %s, fd_num %d this is Error\n", thread_current()->name, fd);
-			// lock_release(&filesys_lock);
 			return -1;
 		}
+		// lock_acquire(&filesys_lock);
 		int temp = file_write(cur->file_list[fd], buffer, size);
 		// lock_release(&filesys_lock);
 
@@ -244,13 +251,14 @@ void close(int fd)
 	if (fd < 2 || fd >= LIST_MAX_SIZE)
 		return;
 	struct thread *cur = thread_current();
-
+	// lock_acquire(&filesys_lock);
 	if (cur->file_list[fd] != NULL)
 	{
 		file_close(cur->file_list[fd]);
 		cur->file_list[fd] = NULL;
 		cur->file_count--;
 	}
+	// lock_release(&filesys_lock);
 }
 // 재원 추가 vm
 static bool

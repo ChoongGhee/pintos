@@ -251,8 +251,10 @@ do_munmap (void *addr) {
         // free(temp->file_info);
 
         struct thread* cur = thread_current();
+      
         spt_remove_page(&cur->spt, temp);
         // free(temp);
+
 
         pml4_set_dirty(cur->pml4, va, 0);
         // pml4_clear_unused_page(&cur->spt, temp);
