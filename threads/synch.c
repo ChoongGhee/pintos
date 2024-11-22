@@ -306,6 +306,7 @@ void lock_acquire(struct lock *lock)
 	sema_down(&lock->semaphore);
 
 	lock->holder = cur;
+	
 	if (!thread_mlfqs)
 	{
 		// 재원 추가 priority-donate-mulitple

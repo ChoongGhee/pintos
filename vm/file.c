@@ -66,6 +66,8 @@ file_backed_destroy (struct page *page) {
     // free(aux);
     // spt_remove_page(&cur->spt, page);
     // pml4_clear_page(cur->pml4, page->va);
+
+    return true;
 }
 bool
 lazy_load_file(struct page *page, void *aux)
@@ -257,6 +259,8 @@ do_munmap (void *addr) {
 
 
         pml4_set_dirty(cur->pml4, va, 0);
+        // pml4_clear_page(cur->pml4, temp->va);
+
         // pml4_clear_unused_page(&cur->spt, temp);
 
         length -= PGSIZE;

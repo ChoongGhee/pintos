@@ -72,15 +72,15 @@ uninit_destroy (struct page *page) {
 	 * TODO: If you don't have anything to do, just return. */
 	if(uninit->type == VM_ANON){
 		if(page->frame->kva != NULL){
-			palloc_free_page(page->frame->kva);
+			// palloc_free_page(page->frame->kva);
 		}
 	}
 	else{
 		if(page->frame->kva != NULL){
-			palloc_free_page(page->frame->kva);
+			// palloc_free_page(page->frame->kva);
 		}
 	}
 
-	free(page);
+	// free(page);
 
 }

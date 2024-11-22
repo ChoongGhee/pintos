@@ -63,6 +63,8 @@ struct page {
 
 	bool writable;
 	bool is_swapped;
+	int swap_slot;
+	
 	struct file_info* file_info;
 	
 	struct hash_elem hash_elem;

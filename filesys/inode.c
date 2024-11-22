@@ -7,10 +7,13 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 // 재원 추가
+#include "threads/synch.h"
 // #include "threads/thread.h"
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
+
+struct lock inode_lock;
 /* On-disk inode.
  * Must be exactly DISK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -62,6 +65,7 @@ static struct list open_inodes;
 void inode_init(void)
 {
 	list_init(&open_inodes);
+	lock_init(&inode_lock);
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -113,6 +117,7 @@ inode_open(disk_sector_t sector)
 	struct list_elem *e;
 	struct inode *inode;
 
+	lock_acquire(&inode_lock);
 	/* Check whether this inode is already open. */
 	for (e = list_begin(&open_inodes); e != list_end(&open_inodes);
 		 e = list_next(e))
@@ -121,14 +126,16 @@ inode_open(disk_sector_t sector)
 		if (inode->sector == sector)
 		{
 			inode_reopen(inode);
+			lock_release(&inode_lock);
 			return inode;
 		}
 	}
 
 	/* Allocate memory. */
 	inode = malloc(sizeof *inode);
-	if (inode == NULL)
-		return NULL;
+	if (inode == NULL){
+		lock_release(&inode_lock);
+		return NULL;}
 
 	/* Initialize. */
 	list_push_front(&open_inodes, &inode->elem);
@@ -137,6 +144,7 @@ inode_open(disk_sector_t sector)
 	inode->deny_write_cnt = 0;
 	inode->removed = false;
 	disk_read(filesys_disk, inode->sector, &inode->data);
+	lock_release(&inode_lock);
 	return inode;
 }
 
