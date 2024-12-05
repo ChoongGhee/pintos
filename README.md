@@ -11,7 +11,7 @@ PintOS는 x86 아키텍처를 위한 교육용 운영체제로, 운영체제의 
 - Architecture: 80x86
 - Environment: Ubuntu 18.04 LTS
 - Tools: GDB, QEMU
-- 
+
 ## 🔍 주요 구현 내용
 
 ### Thread 
