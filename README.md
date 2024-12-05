@@ -11,6 +11,24 @@ PintOS는 x86 아키텍처를 위한 교육용 운영체제로, 운영체제의 
 - Architecture: 80x86
 - Environment: Ubuntu 18.04 LTS
 - Tools: GDB, QEMU
+- 
+## 🔍 주요 구현 내용
+
+### Thread 
+- 우선순위 기반 스케줄러 구현
+- Priority Donation을 통한 Priority Inversion 문제 해결
+- Multi-level Feedback Queue 구현으로 CPU 자원 공정 분배
+
+### User Program
+- System Call 인터페이스 구현
+- 프로세스 관리 시스템 구축
+- File Descriptor 관리 시스템 개발
+
+### Virtual Memory
+- Page Table Management 구현
+- Stack Growth 동적 관리
+- Memory Mapped Files 지원
+- Swap In/Out 매커니즘 구현
 
 ## 🏆 주요 기술 성과
 
@@ -35,20 +53,3 @@ PintOS는 x86 아키텍처를 위한 교육용 운영체제로, 운영체제의 
   - 메모리 참조 카운팅 구현
   - 순환 참조 감지 및 처리
 
-## 🔍 주요 구현 내용
-
-### Thread 
-- 우선순위 기반 스케줄러 구현
-- Priority Donation을 통한 Priority Inversion 문제 해결
-- Multi-level Feedback Queue 구현으로 CPU 자원 공정 분배
-
-### User Program
-- System Call 인터페이스 구현
-- 프로세스 관리 시스템 구축
-- File Descriptor 관리 시스템 개발
-
-### Virtual Memory
-- Page Table Management 구현
-- Stack Growth 동적 관리
-- Memory Mapped Files 지원
-- Swap In/Out 매커니즘 구현
