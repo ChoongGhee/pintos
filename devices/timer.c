@@ -7,6 +7,7 @@
 #include "threads/io.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "lib/kernel/list.h"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -19,6 +20,9 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
+
+static struct list sleep_list;  // List of threads that are sleeping
+
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -41,6 +45,8 @@ timer_init (void) {
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
 	outb (0x40, count >> 8);
+
+    list_init (&sleep_list);
 
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -90,11 +96,25 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
-
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+
+    // alram-zero, negative
+    if (ticks <= 0)
+        return;
+
+    int64_t start = timer_ticks ();
+
+    struct thread* cur = thread_current ();
+
+    enum intr_level old_level = intr_disable ();
+    cur->wakeup_tick = start + ticks;
+    list_push_back (&sleep_list, &cur->elem);
+    thread_block ();
+    intr_set_level (old_level);
+
+    // Delete Buzy wait
+    //	while (timer_elapsed (start) < ticks)
+    //		thread_yield ();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,6 +145,20 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+    if (!list_empty(&sleep_list)) {
+        struct list_elem *e = list_begin (&sleep_list);
+        while(e != list_end (&sleep_list)) {
+            struct thread *t = list_entry (e, struct thread, elem);
+            if (t->wakeup_tick <= ticks) {
+                enum intr_level old_level = intr_disable ();
+                e = list_remove (e);
+                thread_unblock (t);
+                intr_set_level (old_level);
+            } else {
+                e = list_next(e);
+            }
+        }
+    }
 	thread_tick ();
 }
 
