@@ -93,19 +93,6 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-/* wakeup_tick or priority less comparision. */
-bool compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux) {
-    struct thread *t_a = list_entry (a, struct thread, elem);
-    struct thread *t_b = list_entry (b, struct thread, elem);
-
-    size_t offset = (size_t)aux;
-
-    int val_a = *(int *)((char *)t_a + offset);
-    int val_b = *(int *)((char *)t_b + offset);
-
-    return val_a > val_b;
-}
-
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
@@ -121,7 +108,7 @@ timer_sleep (int64_t ticks) {
 
     enum intr_level old_level = intr_disable ();
     cur->wakeup_tick = start + ticks;
-    list_insert_ordered (&sleep_list, &cur->elem, compare_field_greater, (void *)offsetof(struct thread, priority));
+    list_insert_ordered (&sleep_list, &cur->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
     // list_push_back (&sleep_list, &cur->elem);
     thread_block ();
     intr_set_level (old_level);
@@ -162,6 +149,8 @@ static void wakeup_threads () {
             if (t->wakeup_tick <= ticks) {
                 e = list_remove (e);
                 thread_unblock (t);
+
+                thread_preempt ();
             } else {
                 e = list_next (e);
             }

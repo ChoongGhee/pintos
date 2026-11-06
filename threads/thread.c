@@ -207,7 +207,22 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+    thread_preempt ();
+
 	return tid;
+}
+
+/* wakeup_tick or priority less comparision. */
+bool thread_compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux) {
+    struct thread *t_a = list_entry (a, struct thread, elem);
+    struct thread *t_b = list_entry (b, struct thread, elem);
+
+    size_t offset = (size_t)aux;
+
+    int val_a = *(int *)((char *)t_a + offset);
+    int val_b = *(int *)((char *)t_b + offset);
+
+    return val_a > val_b;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -240,7 +255,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+    // list_push_back (&ready_list, &t->elem);
+    // Priority Scheduling: Insert the thread into the ready list in order of priority (highest first)
+    list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -292,6 +309,16 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
+void thread_preempt () {
+    struct thread *curr = thread_current();
+    if (!list_empty (&ready_list) && !(curr == idle_thread)) {
+        struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
+        if (next->priority > curr->priority) {
+            thread_yield();
+        }
+    }
+}
+
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void
@@ -312,6 +339,8 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+
+    thread_preempt ();
 }
 
 /* Returns the current thread's priority. */
