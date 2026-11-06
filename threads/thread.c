@@ -312,7 +312,9 @@ thread_exit (void) {
 void thread_preempt () {
     struct thread *curr = thread_current();
     if (!list_empty (&ready_list) && !(curr == idle_thread)) {
-        struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
+        list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+
+        struct thread *next = list_entry (list_front(&ready_list), struct thread, elem);
         if (next->priority > curr->priority) {
             thread_yield();
         }
@@ -437,6 +439,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+    t->backup_priority = priority;
 	t->magic = THREAD_MAGIC;
 }
 
