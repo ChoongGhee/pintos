@@ -68,8 +68,8 @@ sema_down (struct semaphore *sema) {
 	while (sema->value == 0) {
 		list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
-	}
-	sema->value--;
+    }
+    sema->value--;
 	intr_set_level (old_level);
 }
 
@@ -188,6 +188,14 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+    struct thread * curr = thread_current();
+    if (curr == lock->holder) // 굳이 해야하는가? 안해도 되어보임
+        return;
+
+    if (lock->holder != NULL) {
+        if (lock->holder->priority < curr->priority)
+        lock->holder->priority = curr->priority;
+    }
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
 }
@@ -224,6 +232,7 @@ lock_release (struct lock *lock) {
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+    thread_preempt();
 }
 
 /* Returns true if the current thread holds LOCK, false
