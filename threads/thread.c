@@ -255,9 +255,10 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-    // list_push_back (&ready_list, &t->elem);
+	// 원복 시킴 next_to_run 함수에 의해서 
+    list_push_back (&ready_list, &t->elem);
     // Priority Scheduling: Insert the thread into the ready list in order of priority (highest first)
-    list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+    // list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -312,12 +313,14 @@ thread_exit (void) {
 void thread_preempt () {
     struct thread *curr = thread_current();
     if (!list_empty (&ready_list) && !(curr == idle_thread)) {
-        list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+		enum intr_level old_level = intr_disable();
+        // list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 
         struct thread *next = list_entry (list_front(&ready_list), struct thread, elem);
         if (next->priority > curr->priority) {
             thread_yield();
         }
+		intr_set_level (old_level);
     }
 }
 
@@ -440,6 +443,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
     t->backup_priority = priority;
+    t->waiting_lock = NULL;
+    list_init (&t->held_locks);
 	t->magic = THREAD_MAGIC;
 }
 
@@ -452,8 +457,11 @@ static struct thread *
 next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
-	else
+	else {
+		list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+	}
+		
 }
 
 /* Use iretq to launch the thread */

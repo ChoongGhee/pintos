@@ -1,0 +1,4 @@
+build/
+.qtc_clangd/
+pintos.*
+

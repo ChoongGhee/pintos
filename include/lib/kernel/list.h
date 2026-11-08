@@ -103,6 +103,7 @@ struct list {
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
 	((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
 		- offsetof (STRUCT, MEMBER.next)))
+#define entry_thread(elem) list_entry(elem, struct thread, elem)
 
 void list_init (struct list *);
 

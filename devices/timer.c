@@ -108,8 +108,8 @@ timer_sleep (int64_t ticks) {
 
     enum intr_level old_level = intr_disable ();
     cur->wakeup_tick = start + ticks;
-    list_insert_ordered (&sleep_list, &cur->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
-    // list_push_back (&sleep_list, &cur->elem);
+    // list_insert_ordered (&sleep_list, &cur->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+    list_push_back (&sleep_list, &cur->elem);
     thread_block ();
     intr_set_level (old_level);
 
@@ -149,8 +149,11 @@ static void wakeup_threads () {
             if (t->wakeup_tick <= ticks) {
                 e = list_remove (e);
                 thread_unblock (t);
-
-                thread_preempt ();
+				
+				// 해당 부분은 priotity가 변경되지 않아. sort 필요없이 yield 가능.
+				// 인터럽트 동작이므로 이후 yield 하도록 의도함.
+                if (t->priority > thread_current()->priority)
+            		intr_yield_on_return();        
             } else {
                 e = list_next (e);
             }
