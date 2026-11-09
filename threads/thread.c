@@ -79,6 +79,28 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+/* Scheduler profiling counters. */
+// 정렬만 세면 삽입이나 선점쪽 비용은 빠져서 따로 봄.
+static struct {
+    uint64_t schedule_calls;
+    uint64_t sort_calls;
+    uint64_t priority_compares;
+    uint64_t pick_comparisons;
+    uint64_t insert_comparisons;
+    uint64_t preempt_comparisons;
+    // READY 우선순위 바뀌어서 실제로 다시 넣을 때만 셈.
+    uint64_t priority_requeues;
+    uint64_t requeue_comparisons;
+
+    uint64_t unblock_inserts;
+    uint64_t yield_inserts;
+
+    uint64_t preempt_checks;
+
+    uint64_t ready_count;
+	uint64_t max_ready_count;
+} sched_prof;
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -157,8 +179,47 @@ thread_tick (void) {
 /* Prints thread statistics. */
 void
 thread_print_stats (void) {
+    // 출력 중에 타이머 들어오면 값이 달라져서 먼저 복사해둠.
+    enum intr_level old_level = intr_disable();
+    typeof (sched_prof) snapshot = sched_prof;
+    ASSERT (snapshot.ready_count == list_size (&ready_list));
+    intr_set_level(old_level);
+
 	printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
 			idle_ticks, kernel_ticks, user_ticks);
+
+	/* 기존 Thread 통계 출력 코드 유지 */
+
+    printf("[SCHED PROFILE]\n");
+    printf("schedule_calls: %llu\n",
+           (unsigned long long) snapshot.schedule_calls);
+    printf("sort_calls: %llu\n",
+           (unsigned long long) snapshot.sort_calls);
+    printf("priority_compares: %llu\n",
+           (unsigned long long) snapshot.priority_compares);
+
+    printf("unblock_inserts: %llu\n",
+           (unsigned long long) snapshot.unblock_inserts);
+    printf("yield_inserts: %llu\n",
+           (unsigned long long) snapshot.yield_inserts);
+
+    printf("preempt_checks: %llu\n",
+           (unsigned long long) snapshot.preempt_checks);
+
+    printf("pick_comparisons: %llu\n",
+           (unsigned long long) snapshot.pick_comparisons);
+    printf("insert_comparisons: %llu\n",
+           (unsigned long long) snapshot.insert_comparisons);
+    printf("preempt_comparisons: %llu\n",
+           (unsigned long long) snapshot.preempt_comparisons);
+    printf("priority_requeues: %llu\n",
+           (unsigned long long) snapshot.priority_requeues);
+    printf("requeue_comparisons: %llu\n",
+           (unsigned long long) snapshot.requeue_comparisons);
+    printf("ready_count: %llu\n",
+           (unsigned long long) snapshot.ready_count);
+    printf("max_ready_count: %llu\n",
+           (unsigned long long) snapshot.max_ready_count);
 }
 
 /* Creates a new kernel thread named NAME with the given initial
@@ -214,7 +275,9 @@ thread_create (const char *name, int priority,
 
 /* wakeup_tick or priority less comparision. */
 bool thread_compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux) {
-    struct thread *t_a = list_entry (a, struct thread, elem);
+    // 세마 대기열도 여기 쓰니까 READY 비용은 작업 전후 차이로 따로 봄.
+    sched_prof.priority_compares++;
+	struct thread *t_a = list_entry (a, struct thread, elem);
     struct thread *t_b = list_entry (b, struct thread, elem);
 
     size_t offset = (size_t)aux;
@@ -256,9 +319,18 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	// 원복 시킴 next_to_run 함수에 의해서 
+    uint64_t compares_before = sched_prof.priority_compares;
     list_push_back (&ready_list, &t->elem);
+	
+	// for check
+	sched_prof.unblock_inserts++;
+	sched_prof.ready_count++;
+
+	if (sched_prof.ready_count > sched_prof.max_ready_count)
+    	sched_prof.max_ready_count = sched_prof.ready_count;
     // Priority Scheduling: Insert the thread into the ready list in order of priority (highest first)
     // list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+    sched_prof.insert_comparisons += sched_prof.priority_compares - compares_before;
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -311,12 +383,17 @@ thread_exit (void) {
 }
 
 void thread_preempt () {
+    // 함수 들어온 횟수랑 실제로 비교한 횟수는 다름.
+    enum intr_level prof_old_level = intr_disable();
+	sched_prof.preempt_checks++;
+    intr_set_level(prof_old_level);
     struct thread *curr = thread_current();
     if (!list_empty (&ready_list) && !(curr == idle_thread)) {
 		enum intr_level old_level = intr_disable();
         // list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 
         struct thread *next = list_entry (list_front(&ready_list), struct thread, elem);
+        sched_prof.preempt_comparisons++;
         if (next->priority > curr->priority) {
             thread_yield();
         }
@@ -334,8 +411,17 @@ thread_yield (void) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
-	if (curr != idle_thread)
+	if (curr != idle_thread) {
+        uint64_t compares_before = sched_prof.priority_compares;
 		list_push_back (&ready_list, &curr->elem);
+        sched_prof.insert_comparisons += sched_prof.priority_compares - compares_before;
+        // yield로 다시 들어온건 unblock이랑 나눠서 봄.
+		sched_prof.yield_inserts++;
+		sched_prof.ready_count++;
+
+		if (sched_prof.ready_count > sched_prof.max_ready_count)
+			sched_prof.max_ready_count = sched_prof.ready_count;
+	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -455,10 +541,18 @@ init_thread (struct thread *t, const char *name, int priority) {
    idle_thread. */
 static struct thread *
 next_thread_to_run (void) {
+	sched_prof.schedule_calls++;
+
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else {
+        // A는 고르기 직전에 정렬함. 여기서 비교 얼마나 하는지 봄.
+		sched_prof.sort_calls++;
+
+        uint64_t compares_before = sched_prof.priority_compares;
 		list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+        sched_prof.pick_comparisons += sched_prof.priority_compares - compares_before;
+		sched_prof.ready_count--;
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 	}
 		
@@ -628,3 +722,5 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+

@@ -95,7 +95,7 @@ struct thread {
     int backup_priority;                /* Backup priority for priority donation. */
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-    struct lock waiting_lock;                  /* The lock that the thread is waiting for. */
+    struct lock *waiting_lock;                  /* The lock that the thread is waiting for. */
     struct list held_locks;
 
 #ifdef USERPROG
