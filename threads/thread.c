@@ -320,7 +320,8 @@ thread_unblock (struct thread *t) {
 	ASSERT (t->status == THREAD_BLOCKED);
 	// 원복 시킴 next_to_run 함수에 의해서 
     uint64_t compares_before = sched_prof.priority_compares;
-    list_push_back (&ready_list, &t->elem);
+    // A에서는 그냥 뒤에 넣었음. B는 들어올 때 정렬해서 넣음.
+    // list_push_back (&ready_list, &t->elem);
 	
 	// for check
 	sched_prof.unblock_inserts++;
@@ -329,7 +330,7 @@ thread_unblock (struct thread *t) {
 	if (sched_prof.ready_count > sched_prof.max_ready_count)
     	sched_prof.max_ready_count = sched_prof.ready_count;
     // Priority Scheduling: Insert the thread into the ready list in order of priority (highest first)
-    // list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+    list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
     sched_prof.insert_comparisons += sched_prof.priority_compares - compares_before;
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -390,6 +391,7 @@ void thread_preempt () {
     struct thread *curr = thread_current();
     if (!list_empty (&ready_list) && !(curr == idle_thread)) {
 		enum intr_level old_level = intr_disable();
+        // 넣을 때 순서 맞춰놨으니까 선점할 때도 맨 앞만 보면 됨.
         // list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
 
         struct thread *next = list_entry (list_front(&ready_list), struct thread, elem);
@@ -413,7 +415,9 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread) {
         uint64_t compares_before = sched_prof.priority_compares;
-		list_push_back (&ready_list, &curr->elem);
+        // yield도 READY로 다시 넣는거라 여기도 순서 맞춰서 넣음.
+		// list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
         sched_prof.insert_comparisons += sched_prof.priority_compares - compares_before;
         // yield로 다시 들어온건 unblock이랑 나눠서 봄.
 		sched_prof.yield_inserts++;
@@ -424,6 +428,19 @@ thread_yield (void) {
 	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+// 기부받고 우선순위 바뀌면 READY 위치도 다시 맞춰줘야 함.
+void thread_requeue_ready (struct thread *t) {
+    ASSERT (intr_get_level () == INTR_OFF);
+    if (t->status == THREAD_READY) {
+        list_remove(&t->elem);
+        uint64_t compares_before = sched_prof.priority_compares;
+        list_insert_ordered(&ready_list, &t->elem, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+        sched_prof.requeue_comparisons += sched_prof.priority_compares - compares_before;
+        // READY 개수는 그대로고 위치만 바뀐거라 재배치만 셈.
+        sched_prof.priority_requeues++;
+    }
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -546,12 +563,13 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else {
+        // B는 이미 정렬되어 있으니까 여기 정렬은 안씀. 앞에서 꺼내면 됨.
         // A는 고르기 직전에 정렬함. 여기서 비교 얼마나 하는지 봄.
-		sched_prof.sort_calls++;
+		// sched_prof.sort_calls++;
 
-        uint64_t compares_before = sched_prof.priority_compares;
-		list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
-        sched_prof.pick_comparisons += sched_prof.priority_compares - compares_before;
+        // uint64_t compares_before = sched_prof.priority_compares;
+		// list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+        // sched_prof.pick_comparisons += sched_prof.priority_compares - compares_before;
 		sched_prof.ready_count--;
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 	}

@@ -127,6 +127,7 @@ typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_preempt ();
+void thread_requeue_ready (struct thread *t); // READY 우선순위 바뀌면 위치 맞춤.
 bool thread_compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_block (void);
 void thread_unblock (struct thread *);

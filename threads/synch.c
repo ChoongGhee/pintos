@@ -191,8 +191,15 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
     struct thread * curr = thread_current();
-    if (lock->holder!= NULL && lock->holder->priority < curr->priority)
+    // 원래는 기부만 했음. READY에 있으면 우선순위 바뀐 위치도 맞춰줘야 함.
+    // if (lock->holder!= NULL && lock->holder->priority < curr->priority)
+    //     lock->holder->priority = curr->priority;
+    enum intr_level old_level = intr_disable();
+    if (lock->holder!= NULL && lock->holder->priority < curr->priority) {
         lock->holder->priority = curr->priority;
+        thread_requeue_ready(lock->holder);
+    }
+    intr_set_level(old_level);
 
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
