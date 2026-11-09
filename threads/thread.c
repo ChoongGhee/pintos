@@ -384,23 +384,34 @@ thread_exit (void) {
 }
 
 void thread_preempt () {
-    // 함수 들어온 횟수랑 실제로 비교한 횟수는 다름.
-    enum intr_level prof_old_level = intr_disable();
-	sched_prof.preempt_checks++;
-    intr_set_level(prof_old_level);
+    sched_prof.preempt_checks++;
+
+	enum intr_level old_level = intr_disable();
     struct thread *curr = thread_current();
-    if (!list_empty (&ready_list) && !(curr == idle_thread)) {
-		enum intr_level old_level = intr_disable();
+	bool should_preempt = false;
+
+    if (!list_empty (&ready_list)) {
         // 넣을 때 순서 맞춰놨으니까 선점할 때도 맨 앞만 보면 됨.
         // list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
-
         struct thread *next = list_entry (list_front(&ready_list), struct thread, elem);
-        sched_prof.preempt_comparisons++;
-        if (next->priority > curr->priority) {
-            thread_yield();
+
+        if (curr == idle_thread) {
+            should_preempt = true;
+        } else {
+            sched_prof.preempt_comparisons++;
+
+            should_preempt = next->priority > curr->priority;
         }
-		intr_set_level (old_level);
-    }
+	}
+
+	if (should_preempt) {
+		if (intr_context())
+			intr_yield_on_return();
+		else
+			thread_yield();
+	}
+    
+	intr_set_level (old_level);
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
@@ -446,7 +457,10 @@ void thread_requeue_ready (struct thread *t) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	
+	struct thread *curr = thread_current();
+	curr->priority = new_priority;
+	curr->backup_priority = new_priority;
 
     thread_preempt ();
 }
