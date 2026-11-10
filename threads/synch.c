@@ -175,6 +175,7 @@ lock_init (struct lock *lock) {
 	ASSERT (lock != NULL);
 
 	lock->holder = NULL;
+   lock->donated_priority = PRI_MIN;
 	sema_init (&lock->semaphore, 1);
 }
 
@@ -192,18 +193,20 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-    struct thread * curr = thread_current();
-    // 원래는 기부만 했음. READY에 있으면 우선순위 바뀐 위치도 맞춰줘야 함.
-    // if (lock->holder!= NULL && lock->holder->priority < curr->priority)
-    //     lock->holder->priority = curr->priority;
-    enum intr_level old_level = intr_disable();
-    if (lock->holder!= NULL && lock->holder->priority < curr->priority) {
-        lock->holder->priority = curr->priority;
-        thread_requeue_ready(lock->holder);
-    }
-    intr_set_level(old_level);
+   struct thread * curr = thread_current ();
+   enum intr_level old_level = intr_disable ();
+
+   if (lock->donated_priority < curr->priority)
+      lock->donated_priority = curr->priority;
+
+   if (lock->holder != NULL && lock->holder->priority < curr->priority) {
+      lock->holder->priority = curr->priority;
+      thread_requeue_ready (lock->holder);
+   }
+   intr_set_level (old_level);
 
 	sema_down (&lock->semaphore);
+   list_push_back (&curr->held_locks, &lock->held_elem);
 	lock->holder = thread_current ();
 }
 
@@ -221,8 +224,10 @@ lock_try_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	success = sema_try_down (&lock->semaphore);
-	if (success)
+	if (success) {
 		lock->holder = thread_current ();
+      list_push_back (&thread_current()->held_locks,&lock->held_elem);
+   }
 	return success;
 }
 
@@ -237,10 +242,16 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-    lock->holder->priority = lock->holder->backup_priority;
-    lock->holder = NULL;
+   enum intr_level old_level = intr_disable ();
+   list_remove (&lock->held_elem);
+   lock->holder = NULL;
+   
+   thread_refesh_priority ();
+   lock->donated_priority = PRI_MIN;
+
 	sema_up (&lock->semaphore);
-    thread_preempt();
+   intr_set_level (old_level);
+   thread_preempt ();
 }
 
 /* Returns true if the current thread holds LOCK, false

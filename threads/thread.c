@@ -274,7 +274,8 @@ thread_create (const char *name, int priority,
 }
 
 /* wakeup_tick or priority less comparision. */
-bool thread_compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux) {
+bool 
+thread_compare_field_greater (const struct list_elem *a, const struct list_elem *b, void *aux) {
     // 세마 대기열도 여기 쓰니까 READY 비용은 작업 전후 차이로 따로 봄.
     sched_prof.priority_compares++;
 	struct thread *t_a = list_entry (a, struct thread, elem);
@@ -383,7 +384,8 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
-void thread_preempt () {
+void 
+thread_preempt () {
     sched_prof.preempt_checks++;
 
 	enum intr_level old_level = intr_disable();
@@ -442,7 +444,8 @@ thread_yield (void) {
 }
 
 // 기부받고 우선순위 바뀌면 READY 위치도 다시 맞춰줘야 함.
-void thread_requeue_ready (struct thread *t) {
+void 
+thread_requeue_ready (struct thread *t) {
     ASSERT (intr_get_level () == INTR_OFF);
     if (t->status == THREAD_READY) {
         list_remove(&t->elem);
@@ -452,6 +455,23 @@ void thread_requeue_ready (struct thread *t) {
         // READY 개수는 그대로고 위치만 바뀐거라 재배치만 셈.
         sched_prof.priority_requeues++;
     }
+}
+
+void 
+thread_refesh_priority () {
+	ASSERT(intr_get_level() == INTR_OFF);
+
+	struct thread *curr = thread_current();
+    int max_priority = curr->backup_priority;
+
+    for (struct list_elem *e = list_begin(&curr->held_locks);e != list_end(&curr->held_locks);e = list_next(e)) {
+        struct lock *lock = list_entry(e, struct lock, held_elem);
+
+        if (max_priority < lock->donated_priority)
+            max_priority = lock->donated_priority;
+    }
+
+	curr->priority = max_priority;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
