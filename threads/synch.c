@@ -108,11 +108,12 @@ sema_up (struct semaphore *sema) {
 
 	ASSERT (sema != NULL);
 
-    old_level = intr_disable ();
-    if (!list_empty (&sema->waiters)) {
-        struct thread *front_t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
-        thread_unblock (front_t);
-    }
+   old_level = intr_disable ();
+   if (!list_empty (&sema->waiters)) {
+      list_sort(&sema->waiters, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+      struct thread *front_t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
+      thread_unblock (front_t);
+   }
 	sema->value++;
 	intr_set_level (old_level);
 
@@ -187,7 +188,7 @@ lock_init (struct lock *lock) {
    we need to sleep. */
 void
 lock_acquire (struct lock *lock) {
-	ASSERT (lock != NULL);
+   ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
