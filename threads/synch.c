@@ -190,18 +190,19 @@ lock_init (struct lock *lock) {
 void
 lock_acquire (struct lock *lock) {
    ASSERT (lock != NULL);
-	ASSERT (!intr_context ());
+    ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
    struct thread * curr = thread_current ();
    enum intr_level old_level = intr_disable ();
+   if (lock->holder != NULL){
+       if (lock->donated_priority < curr->priority)
+          lock->donated_priority = curr->priority;
 
-   if (lock->donated_priority < curr->priority)
-      lock->donated_priority = curr->priority;
-
-   if (lock->holder != NULL && lock->holder->priority < curr->priority) {
-      lock->holder->priority = curr->priority;
-      thread_requeue_ready (lock->holder);
+       if (lock->holder->priority < curr->priority) {
+          lock->holder->priority = curr->priority;
+          thread_requeue_ready (lock->holder);
+       }
    }
    intr_set_level (old_level);
 

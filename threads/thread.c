@@ -421,11 +421,10 @@ thread_preempt () {
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
-	enum intr_level old_level;
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable ();
+    enum intr_level old_level = intr_disable ();
 	if (curr != idle_thread) {
         uint64_t compares_before = sched_prof.priority_compares;
         // yield도 READY로 다시 넣는거라 여기도 순서 맞춰서 넣음.
@@ -459,8 +458,7 @@ thread_requeue_ready (struct thread *t) {
 
 void 
 thread_refesh_priority () {
-	ASSERT(intr_get_level() == INTR_OFF);
-
+    ASSERT (intr_get_level () == INTR_OFF);
 	struct thread *curr = thread_current();
     int max_priority = curr->backup_priority;
 
@@ -479,9 +477,12 @@ void
 thread_set_priority (int new_priority) {
 	
 	struct thread *curr = thread_current();
-	curr->priority = new_priority;
+    // curr->priority = new_priority;
+    enum intr_level old_level = intr_disable ();
 	curr->backup_priority = new_priority;
 
+    thread_refesh_priority ();
+    intr_set_level (old_level);
     thread_preempt ();
 }
 
