@@ -179,6 +179,30 @@ lock_init (struct lock *lock) {
 	sema_init (&lock->semaphore, 1);
 }
 
+static void
+donate_priority (struct thread *donor, struct lock *lock)
+{
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    int priority = donor->priority;
+
+    while (lock != NULL && lock->holder != NULL) {
+        struct thread *holder = lock->holder;
+
+        // 최초 요청자로 돌아왔다면 Circular Wait
+        ASSERT(holder != donor);
+
+        if (lock->donated_priority < priority)
+            lock->donated_priority = priority;
+
+        if (holder->priority < priority) {
+            holder->priority = priority;
+            thread_requeue_ready(holder);
+        }
+
+        lock = holder->waiting_lock;
+    }
+}
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -190,25 +214,24 @@ lock_init (struct lock *lock) {
 void
 lock_acquire (struct lock *lock) {
    ASSERT (lock != NULL);
-    ASSERT (!intr_context ());
+   ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
    struct thread * curr = thread_current ();
    enum intr_level old_level = intr_disable ();
-   if (lock->holder != NULL){
-       if (lock->donated_priority < curr->priority)
-          lock->donated_priority = curr->priority;
-
-       if (lock->holder->priority < curr->priority) {
-          lock->holder->priority = curr->priority;
-          thread_requeue_ready (lock->holder);
-       }
+   if (lock->holder != NULL) {
+      curr->waiting_lock = lock;
+      donate_priority (curr, lock);
    }
-   intr_set_level (old_level);
-
+   
 	sema_down (&lock->semaphore);
+
+   curr->waiting_lock = NULL;
+
+   lock->holder = curr;
    list_push_back (&curr->held_locks, &lock->held_elem);
-	lock->holder = thread_current ();
+	
+   intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
