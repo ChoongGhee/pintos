@@ -11,6 +11,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -24,6 +25,9 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+#define FP_SCALE (1 << 14)
+
+static int32_t load_avg_fp;
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -132,6 +136,7 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
+	load_avg_fp = 0;
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -155,12 +160,31 @@ thread_start (void) {
 	sema_down (&idle_started);
 }
 
+static void
+update_load_avg(void)
+{
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    int ready_threads = list_size(&ready_list);
+
+    // RUNNING Thread 포함, 단 idle은 제외
+    if (thread_current() != idle_thread)
+        ready_threads++;
+
+    // load_avg = (59 * load_avg + ready_threads) / 60
+    load_avg_fp = ((int64_t)59 * load_avg_fp + (int64_t)ready_threads * FP_SCALE) / 60;
+}
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
 
+	if (thread_mlfqs) {
+        if (timer_ticks() % TIMER_FREQ == 0)
+            update_load_avg();
+
+    }
 	/* Update statistics. */
 	if (t == idle_thread)
 		idle_ticks++;
@@ -475,7 +499,9 @@ thread_refesh_priority () {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	
+	if (thread_mlfqs)
+		return;
+
 	struct thread *curr = thread_current();
     // curr->priority = new_priority;
     enum intr_level old_level = intr_disable ();
@@ -509,7 +535,13 @@ thread_get_nice (void) {
 int
 thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	enum intr_level old_level = intr_disable();
+
+    int result = ((int64_t)load_avg_fp * 100 + FP_SCALE / 2) / FP_SCALE;
+
+    intr_set_level(old_level);
+
+    return result;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
