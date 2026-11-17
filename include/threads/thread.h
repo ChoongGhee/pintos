@@ -98,6 +98,9 @@ struct thread {
     struct lock *waiting_lock;                  /* The lock that the thread is waiting for. */
     struct list held_locks;
 
+    int nice;
+    int32_t recent_cpu_fp;
+    struct list_elem all_elem;
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */

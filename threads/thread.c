@@ -31,6 +31,7 @@ static int32_t load_avg_fp;
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -134,6 +135,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+    list_init(&all_list);
 	list_init (&destruction_req);
 
 	load_avg_fp = 0;
@@ -142,6 +144,8 @@ thread_init (void) {
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+
+    list_push_back(&all_list, &initial_thread->all_elem);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -158,6 +162,25 @@ thread_start (void) {
 
 	/* Wait for the idle thread to initialize idle_thread. */
 	sema_down (&idle_started);
+}
+
+static void
+update_recent_cpu_all(void)
+{
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    int32_t twice_load = load_avg_fp * 2;
+
+    int32_t coefficient = ((int64_t)twice_load * FP_SCALE) / (twice_load + FP_SCALE);
+
+    for (struct list_elem *e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+        struct thread *t = list_entry (e, struct thread, all_elem);
+
+        if (t == idle_thread)
+            continue;
+
+        t->recent_cpu_fp = ((int64_t)coefficient * t->recent_cpu_fp) / FP_SCALE + t->nice * FP_SCALE;
+    }
 }
 
 static void
@@ -180,10 +203,14 @@ void
 thread_tick (void) {
 	struct thread *t = thread_current ();
 
-	if (thread_mlfqs) {
-        if (timer_ticks() % TIMER_FREQ == 0)
-            update_load_avg();
+    if (thread_mlfqs) {
+        if (t != idle_thread)
+            t->recent_cpu_fp += FP_SCALE;
 
+        if (timer_ticks() % TIMER_FREQ == 0) {
+            update_load_avg ();
+            update_recent_cpu_all ();
+        }
     }
 	/* Update statistics. */
 	if (t == idle_thread)
@@ -276,7 +303,12 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
-	tid = t->tid = allocate_tid ();
+    tid = t->tid = allocate_tid ();
+
+    if (thread_mlfqs) {
+        t->nice = thread_current()->nice;
+        t->recent_cpu_fp = thread_current()->recent_cpu_fp;
+    }
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -289,6 +321,9 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+    enum intr_level old_level = intr_disable ();
+    list_push_back (&all_list, &t->all_elem);
+    intr_set_level (old_level);
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -337,11 +372,9 @@ thread_block (void) {
    update other data. */
 void
 thread_unblock (struct thread *t) {
-	enum intr_level old_level;
-
 	ASSERT (is_thread (t));
 
-	old_level = intr_disable ();
+    enum intr_level old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	// 원복 시킴 next_to_run 함수에 의해서 
     uint64_t compares_before = sched_prof.priority_compares;
@@ -404,6 +437,7 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
+    list_remove (&thread_current()->all_elem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -547,8 +581,20 @@ thread_get_load_avg (void) {
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+    enum intr_level old_level = intr_disable();
+
+    int64_t value = (int64_t)thread_current()->recent_cpu_fp * 100;
+
+    if (value >= 0)
+        value += FP_SCALE / 2;
+    else
+        value -= FP_SCALE / 2;
+
+    int result = value / FP_SCALE;
+
+    intr_set_level(old_level);
+
+    return result;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -614,6 +660,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
     t->backup_priority = priority;
     t->waiting_lock = NULL;
+    t->nice = 0;
+    t->recent_cpu_fp = 0;
     list_init (&t->held_locks);
 	t->magic = THREAD_MAGIC;
 }
