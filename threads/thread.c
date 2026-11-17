@@ -142,6 +142,10 @@ thread_init (void) {
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
+	
+	if (thread_mlfqs)
+    	initial_thread->priority = PRI_MAX;
+
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
 
@@ -184,6 +188,39 @@ update_recent_cpu_all(void)
 }
 
 static void
+update_mlfqs_priority(struct thread *t)
+{
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    if (t == idle_thread)
+        return;
+
+    int64_t priority_fp = (int64_t)(PRI_MAX - 2 * t->nice) * FP_SCALE - (int64_t)t->recent_cpu_fp / 4;
+    int priority = priority_fp / FP_SCALE;
+
+    if (priority > PRI_MAX)
+        priority = PRI_MAX;
+    else if (priority < PRI_MIN)
+        priority = PRI_MIN;
+
+    t->priority = priority;
+}
+
+static void
+update_mlfqs_priority_all(void)
+{
+    ASSERT(intr_get_level() == INTR_OFF);
+
+    for (struct list_elem *e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+        struct thread *t = list_entry(e, struct thread, all_elem);
+        update_mlfqs_priority(t);
+    }
+
+    // 여러 READY 스레드의 Priority가 변경되었으므로 재정렬
+    list_sort (&ready_list, thread_compare_field_greater, (void *)offsetof(struct thread, priority));
+}
+
+static void
 update_load_avg(void)
 {
     ASSERT(intr_get_level() == INTR_OFF);
@@ -211,6 +248,17 @@ thread_tick (void) {
             update_load_avg ();
             update_recent_cpu_all ();
         }
+
+		if (timer_ticks() % 4 == 0) {
+        update_mlfqs_priority_all ();
+
+			if (!list_empty (&ready_list)) {
+				struct thread *next =list_entry (list_front(&ready_list),struct thread, elem);
+
+				if (next->priority > t->priority)
+					intr_yield_on_return ();
+			}
+    	}
     }
 	/* Update statistics. */
 	if (t == idle_thread)
@@ -304,10 +352,14 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
     tid = t->tid = allocate_tid ();
+	
+	enum intr_level old_level = intr_disable();
 
     if (thread_mlfqs) {
         t->nice = thread_current()->nice;
         t->recent_cpu_fp = thread_current()->recent_cpu_fp;
+
+		update_mlfqs_priority(t);
     }
 
 	/* Call the kernel_thread if it scheduled.
@@ -321,7 +373,6 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-    enum intr_level old_level = intr_disable ();
     list_push_back (&all_list, &t->all_elem);
     intr_set_level (old_level);
 	/* Add to run queue. */
@@ -555,14 +606,27 @@ thread_get_priority (void) {
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) {
-	/* TODO: Your implementation goes here */
+	ASSERT(nice >= -20 && nice <= 20);
+    ASSERT(!intr_context());
+
+    enum intr_level old_level = intr_disable();
+
+    struct thread *curr = thread_current();
+    curr->nice = nice;
+
+    if (thread_mlfqs)
+        update_mlfqs_priority(curr);
+
+    intr_set_level(old_level);
+
+    if (thread_mlfqs)
+        thread_preempt();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
